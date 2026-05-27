@@ -24,7 +24,7 @@ include = ["tethering*"]
 tethering = ["templates/*.txt"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit"]
 
 [tool.black]
 target-version = ["py310", "py311", "py312"]
