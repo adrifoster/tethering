@@ -1,0 +1,33 @@
+#!/bin/bash
+#PBS -N {job_name}
+#PBS -q {queue}
+#PBS -l select={select}:ncpus={ncpus}:mem={memory}
+#PBS -l walltime={walltime}
+#PBS -A {project}
+#PBS -o {log_file}
+#PBS -j oe
+#PBS -k eod
+#PBS -M {user}
+
+{depend_line}{extra}
+set -euo pipefail
+ 
+trap 'clm-run --root {root} --fail --stage {name}' ERR
+ 
+echo "=== Run: {run_id} / stage: {name} ==="
+echo "=== Started: $(date) ==="
+ 
+# create, configure, and build the CIME case
+# strict mode is enforced even if the user's script doesn't set it
+bash -c 'set -euo pipefail; source "$0" "$@"' {script}
+ 
+# submit the CIME case; capture the final job ID (short-term archiver)
+cd {case_root}
+./case.submit
+CIME_JOB_ID=$(./xmlquery JOB_IDS | tr ':' '\\n' | tail -n 1)
+echo "CIME submitted, final job ID: $CIME_JOB_ID"
+ 
+# 3. write and submit the advance job in Python, with the real job ID
+clm-run --root {root} --submit-advance --stage {name} --cime-job-id $CIME_JOB_ID
+ 
+echo "=== Setup complete: $(date) ==="

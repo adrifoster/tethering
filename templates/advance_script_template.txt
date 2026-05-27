@@ -1,0 +1,13 @@
+#!/bin/bash
+#PBS -N {job_name}
+#PBS -q {queue}
+#PBS -l select=1:ncpus=1:mem=1GB
+#PBS -l walltime=0:10:00
+#PBS -A {project}
+#PBS -j oe
+#PBS -k eod
+#PBS -M {user}
+#PBS -W depend=afterok:{cime_job_id}
+set -euo pipefail
+ 
+clm-run --root {root} --advance --stage {stage_name}
