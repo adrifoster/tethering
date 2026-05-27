@@ -14,7 +14,7 @@ dependencies = [
 clm-run = "tethering.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-cov", "pytest-mock"]
+dev = ["pytest>=8", "pytest-cov", "pytest-mock", "black"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -25,3 +25,7 @@ tethering = ["templates/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.black]
+target-version = ["py310", "py311", "py312"]
+line-length = 88  # default, but good to be explicit

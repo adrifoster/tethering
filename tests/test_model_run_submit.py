@@ -17,6 +17,13 @@ def test_submit_writes_jobscript(created_run, mock_qsub):
     assert job_file.exists()
 
 
+def test_submit_raises_if_template_missing(created_run, mocker):
+    """Test that submit() raises if the PBS template file is missing"""
+    mocker.patch("tethering.model_run._TEMPLATES", created_run.root / "nonexistent")
+    with pytest.raises(FileNotFoundError, match="not found"):
+        created_run.submit()
+
+
 @pytest.mark.parametrize(
     "field,expected",
     [
@@ -156,6 +163,22 @@ def test_submit_skips_if_first_stage_not_pending(
     created_run.stages[0].status.status = non_pending_status
     created_run.submit()
     mock_qsub.assert_not_called()
+
+
+def test_qsub_calls_subprocess_with_correct_args(created_run, mocker):
+    """Test that _qsub calls qsub with the correct arguments"""
+    mock_run = mocker.patch("tethering.model_run.subprocess.run")
+    mock_run.return_value.stdout = "12345.pbs\n"
+
+    created_run.submit()
+
+    job_file = created_run.root / f"{created_run.run_id}_spinup_ad.pbs"
+    mock_run.assert_called_once_with(
+        ["qsub", str(job_file)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
 
 def test_submit_returns_existing_job_id_when_skipping(created_run, mock_qsub):
