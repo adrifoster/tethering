@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import pytest
+import yaml
 
 from tethering.model_run import ModelRun
 from tethering.stages import StageStatus
@@ -50,3 +51,13 @@ def test_model_run_load_missing_state_file_raises(tmp_path):
     """Test that ModelRun.load() raises a ValueError for a missing state file"""
     with pytest.raises(FileNotFoundError, match="run_state.json"):
         ModelRun.load(tmp_path)
+
+
+def test_load_config_expands_env_vars(tmp_path, run_config_dict, monkeypatch):
+    """Test that _load_config expands environment variables in YAML"""
+    monkeypatch.setenv("TEST_ROOT", str(tmp_path / "myrun"))
+    run_config_dict["root"] = "$TEST_ROOT"
+    yaml_path = tmp_path / "config.yml"
+    yaml_path.write_text(yaml.dump(run_config_dict))
+    run = ModelRun.create(yaml_path)
+    assert run.root == tmp_path / "myrun"

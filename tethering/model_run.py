@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 import json
@@ -515,7 +516,8 @@ def _load_config(config: Path | str | dict) -> dict:
         return config
     if isinstance(config, (str, Path)):
         with open(config, encoding="utf-8") as f:
-            return yaml.safe_load(f)
+            raw = os.path.expandvars(f.read())
+            return yaml.safe_load(raw)
     raise TypeError(
         f"config must be a dict, str, or Path, got {type(config).__name__!r}."
     )
