@@ -73,6 +73,7 @@ stages:
 ```bash
 clm-run --create --config run.yaml
 ```
+
 This creates the run directory and writes the initial state file.
 
 ### 3. Submit the pipeline
@@ -89,17 +90,17 @@ This submits the first stage. The rest of the pipeline runs automatically via PB
 clm-run --root /scratch/user/my_spinup --print-status
 ```
 
-
 Output:
-```
+
+```bash
 Run: my_spinup (/work/user/my_spinup)
   ✓ spinup_ad             done
   ... spinup_sasu         submitted   [98765.pbs]
 ```
 
----
+----
 
-## CLI reference
+## Command line reference
 
 ```
 clm-run --create --config run.yaml
@@ -130,7 +131,7 @@ clm-run --root <path> --fail --stage <name>
 
 Add `--dry-run` to any submission command to generate job scripts without calling `qsub`.
 
----
+----
 
 ## Setup scripts
 
@@ -140,9 +141,19 @@ Each stage requires a setup script that creates, configures, and builds the CLM 
 bash <script> <case_root> <optional_previous_case_root>
 ```
 
-The script should not call `./case.submit` — tethering handles that.
+The script should not call `./case.submit`. The tethering pipeline handles that.
 
----
+An example pipeline can be found in `tests/smoke`:
+
+`smoke_test.yaml`: an example run.yaml file that can be used to create the `ModelRun` instance.
+`scripts/`: directory with four scripts: `run_job_ad.sh`, `run_job_sasu.sh`, `run_job_postad.sh`, and `smoke_check.sh`. The first three can be used as example scripts to create your own setup scripts.
+
+> [!WARNING]
+> DOT NOT add `./case.submit` to the end of your scripts!
+
+Also, in the example script you will see several lines which will cause the script to error. This is intentional, and should be replicated in your own scripts if possible. `clm-run` will capture those errors and `FAIL` your stage, allowing you to determine if a stage has died.
+
+----
 
 ## Stage kinds
 
@@ -156,7 +167,7 @@ These don't actually do anything right nowbut may be used in the future.
 | `historical` | Historical run |
 | `custom` | Any other stage type |
 
----
+----
 
 ## Contributing
 
