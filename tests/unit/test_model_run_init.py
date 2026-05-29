@@ -60,7 +60,7 @@ def test_model_run_env_project_accempted(tmp_path, ad_stage, monkeypatch):
     monkeypatch.delenv("PROJECT", raising=False)
 
 
-def test_model_run_env_user_accempted(tmp_path, ad_stage, monkeypatch):
+def test_model_run_env_user_accepted(tmp_path, ad_stage, monkeypatch):
     """Test that ModelRun initialized without a user uses the environment variable"""
     monkeypatch.setenv("USER", "user@ucar.edu")
     run = ModelRun(
@@ -68,7 +68,7 @@ def test_model_run_env_user_accempted(tmp_path, ad_stage, monkeypatch):
         run_id="run",
         stages=[ad_stage],
         user="",
-        project="",
+        project="PROJ",
     )
     assert run.user == "user@ucar.edu"
     monkeypatch.delenv("USER", raising=False)
