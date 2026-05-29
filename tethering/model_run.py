@@ -108,8 +108,8 @@ class ModelRun:
             root=root,
             run_id=cfg.get("run_id", "run"),
             stages=stages,
-            user=cfg["user"],
-            project=cfg["project"],
+            user=cfg.get("user", ""),
+            project=cfg.get("project", ""),
         )
         run.root.mkdir(parents=True, exist_ok=True)
         run.save()
@@ -140,9 +140,9 @@ class ModelRun:
         return cls(
             root=root,
             run_id=state["run_id"],
-            user=state["user"],
+            user=state.get("user", ""),
             stages=[Stage.from_dict(stage) for stage in state["stages"]],
-            project=state["project"],
+            project=state.get("project", ""),
         )
 
     def save(self):

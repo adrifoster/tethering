@@ -1,0 +1,45 @@
+#
+# smoke test pipeline for tethering using ABBY NEON site
+# Usage:
+#   export TETHERING_REPO=/path/to/tethering
+#   bash $TETHERING_REPO/tests/smoke/submit_smoke_test.sh
+ 
+root: $TETHERING_REPO/tests/smoke
+run_id: smoke_ABBY                      
+ 
+stages:
+  - name: spinup_ad
+    script: $TETHERING_REPO/tests/smoke/scripts/run_job_ad.sh
+    walltime: "01:00:00"                    
+    queue: develop
+    ncpus: 1
+    select: 1                                
+    memory: 1GB                           
+    kind: ad
+ 
+  - name: spinup_sasu
+    script: $TETHERING_REPO/tests/smoke/scripts/run_job_sasu.sh
+    walltime: "01:00:00"
+    queue: develop
+    ncpus: 1
+    select: 1
+    memory: 1GB
+    kind: sasu
+ 
+  - name: spinup_postad
+    script: $TETHERING_REPO/tests/smoke/scripts/run_job_postad.sh
+    walltime: "01:00:00"
+    queue: main
+    ncpus: 1
+    select: 1
+    memory: 1GB
+    kind: post-sasu
+ 
+  - name: smoke_check
+    script: $TETHERING_REPO/tests/smoke/scripts/smoke_check.sh
+    walltime: "00:10:00"
+    queue: develop
+    ncpus: 1
+    select: 1
+    memory: 1GB
+    kind: custom
