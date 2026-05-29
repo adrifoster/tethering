@@ -12,5 +12,6 @@ set -euo pipefail
 
 # activate conda environment
 source $(conda info --base)/etc/profile.d/conda.sh
+conda activate tethering
  
 clm-run --root {root} --advance --stage {stage_name}
