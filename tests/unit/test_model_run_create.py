@@ -43,7 +43,7 @@ def test_model_run_create_invalid_type_raises():
         ModelRun.create(42)
 
 
-@pytest.mark.parametrize("missing_key", ["root", "project", "stages", "user"])
+@pytest.mark.parametrize("missing_key", ["root", "stages"])
 def test_model_run_create_missing_required_key_raises(run_config_dict, missing_key):
     """Test that ModelRun.create with missing keys raises a ValueError"""
     del run_config_dict[missing_key]

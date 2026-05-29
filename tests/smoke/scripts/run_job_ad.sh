@@ -23,9 +23,9 @@ cd "${SRC_DIR}/cime/scripts" || { echo "ERROR: Failed to change directory to ${S
 ./create_newcase --case ${case_root} --compset ${COMPSET}  --res ${RES} --project ${PROJECT} --run-unsupported --output-root ${OUT_DIR} --user-mods-dir ${user_mods}
 cd "${case_root}" || { echo "ERROR: Failed to change directory to ${case_root}"; exit 1; }
 
-./xmlchange STOP_OPTION="ndays"
-./xmlchange --subgroup case.run JOB_WALLCLOCK_TIME=12:00:00
+./xmlchange --subgroup case.run JOB_WALLCLOCK_TIME=01:00:00
 ./xmlchange --subgroup case.st_archive JOB_WALLCLOCK_TIME=01:00:00
+./xmlchange STOP_OPTION="ndays"
 ./xmlchange STOP_N=100
 ./xmlchange RESUBMIT=1
 

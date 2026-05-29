@@ -23,7 +23,7 @@ _STATE_FILE = "run_state.json"
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 # keys that must be present in a config dict.
-_REQUIRED_CONFIG_KEYS = frozenset({"root", "project", "stages", "user"})
+_REQUIRED_CONFIG_KEYS = frozenset({"root", "stages"})
 
 
 class ModelRun:
@@ -31,31 +31,30 @@ class ModelRun:
     Manages the full lifecycle of a multi-stage CESM run.
 
     Use ModelRun.create() to initialise a new run on disk, or
-    ModelRun.load() to resume an existing one.  Do not call __init__
-    directly from outside this module.
+    ModelRun.load() to resume an existing one.
 
     Attributes
     ===========
     root: working directory; all CIME cases live under here
     run_id: short identifier, e.g. "member_0042" or "my_spinup"
-    user: username for the machine - used for PBS
-    stages: ordered pipeline of Stage instances
-    project: PBS project code
+    stages: ordered tuple of Stage instances
+    user: username for the machine - used for PBS job submission. can use os.environ variable
+    project: PBS project code to use for job submission. can use os.environ variable
     """
 
     def __init__(
         self,
         root: Path | str,
         run_id: str,
-        user: str,
         stages: tuple[Stage, ...] | list[Stage],
+        user: str,
         project: str,
     ):
         self.root = Path(root)
         self.run_id = run_id
-        self.user = user
         self.stages: tuple[Stage, ...] = tuple(stages)
-        self.project = project
+        self.user = user if user else os.getenv("USER")
+        self.project = project if project else os.getenv("PROJECT")
         self._validate()
 
     def _validate(self):
@@ -108,8 +107,8 @@ class ModelRun:
         run = cls(
             root=root,
             run_id=cfg.get("run_id", "run"),
-            user=cfg["user"],
             stages=stages,
+            user=cfg["user"],
             project=cfg["project"],
         )
         run.root.mkdir(parents=True, exist_ok=True)
@@ -213,6 +212,27 @@ class ModelRun:
                 f"No stage named {after!r}. " f"Known stages: {names}"
             ) from exc
         return self.stages[idx + 1] if idx + 1 < len(self.stages) else None
+    
+    def _previous_stage(self, before: str) -> Stage | None:
+        """Get the previous stage given an input name
+
+        Args:
+            after (str): stage before the stage we want
+
+        Raises:
+            ValueError: Can't find supplied stage
+
+        Returns:
+            Stage | None: previous Stage, or None if first stage
+        """
+        names = [stage.config.name for stage in self.stages]
+        try:
+            idx = names.index(before)
+        except ValueError as exc:
+            raise ValueError(
+                f"No stage named {before!r}. " f"Known stages: {names}"
+            ) from exc
+        return self.stages[idx - 1] if idx > 0 else None
 
     def _case_root_for(self, stage: Stage) -> Path:
         """Generate the case root name for this stage
@@ -401,6 +421,9 @@ class ModelRun:
             Path: path to job script
         """
         case_root = self._case_root_for(stage)
+        previous_stage = self._previous_stage(stage.config.name)
+        previous_stage_name = previous_stage.config.name if previous_stage else ""
+        
         job_name = f"{self.run_id}_{stage.config.name}"
         job_file = self.root / f"{job_name}.pbs"
         depend_line = (
@@ -425,6 +448,7 @@ class ModelRun:
             extra=extra,
             root=self.root,
             name=stage.config.name,
+            previous_case=previous_stage_name,
             run_id=self.run_id,
             script=stage.config.script,
             case_root=case_root,

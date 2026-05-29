@@ -25,3 +25,4 @@ htmlcov/
 *.pbs
 run_state.json
 run_state.json.tmp
+cases/

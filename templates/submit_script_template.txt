@@ -19,15 +19,16 @@ echo "=== Started: $(date) ==="
  
 # create, configure, and build the CIME case
 # strict mode is enforced even if the user's script doesn't set it
-bash -c 'set -euo pipefail; source "$0" "$@"' {script}
+bash -c 'set -euo pipefail; source "$0" "$@"' {script} {root} {run_id}_{name} {previous_case}
  
 # submit the CIME case; capture the final job ID (short-term archiver)
 cd {case_root}
-./case.submit
-CIME_JOB_ID=$(./xmlquery JOB_IDS | tr ':' '\\n' | tail -n 1)
-echo "CIME submitted, final job ID: $CIME_JOB_ID"
+./case.submit --resubmit-immediate
+JOB_IDS=$(./xmlquery JOB_IDS)
+FINAL_JOB_ID=${{JOB_IDS##*:}}
+echo "CIME submitted, final job ID: $FINAL_JOB_ID"
  
 # 3. write and submit the advance job in Python, with the real job ID
-clm-run --root {root} --submit-advance --stage {name} --cime-job-id $CIME_JOB_ID
+clm-run --root {root} --submit-advance --stage {name} --cime-job-id $FINAL_JOB_ID
  
 echo "=== Setup complete: $(date) ==="
