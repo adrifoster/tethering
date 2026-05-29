@@ -8,14 +8,15 @@ RES=CLM_USRDAT
 OUT_DIR=/glade/derecho/scratch/afoster/tether_testing
 SITE=ABBY
 
-if [ $# -lt 2 ]
+if [ $# -lt 1 ]
 then
-  echo "ERROR: please specify root_dir and case_dir"
+  echo "ERROR: please specify a case_root"
   exit 1
 fi
-root_dir="$1"
-case_dir="$2"
-case_root=${root_dir}/${case_dir}
+case_root="$1"
+
+rm -rf ${OUT_DIR}/${case_root}
+rm -rf ${OUT_DIR}/archive/${case_root}
 
 user_mods=${SRC_DIR}/cime_config/usermods_dirs/clm/NEON/${SITE}
 

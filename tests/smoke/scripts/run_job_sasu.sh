@@ -9,15 +9,16 @@ OUT_DIR=/glade/derecho/scratch/afoster/tether_testing
 SITE=ABBY
 USER=afoster
 
-if [ $# -lt 3 ]
+if [ $# -lt 2 ]
 then
-  echo "ERROR: please specify root_dir, case_dir, and prior_case_dir"
+  echo "ERROR: please specify case_root and prior_case_dir"
   exit 1
 fi
-root_dir="$1"
-case_dir="$2"
-prior_case_dir="$3"
-case_root=${root_dir}/${case_dir}
+case_root="$1"
+prior_case_dir="$2"
+
+rm -rf ${OUT_DIR}/${case_root}
+rm -rf ${OUT_DIR}/archive/${case_root}
 
 user_mods=${SRC_DIR}/cime_config/usermods_dirs/clm/NEON/${SITE}
 

@@ -9,5 +9,8 @@
 #PBS -M {user}
 #PBS -W depend=afterok:{cime_job_id}
 set -euo pipefail
+
+# activate conda environment
+source $(conda info --base)/etc/profile.d/conda.sh
  
 clm-run --root {root} --advance --stage {stage_name}

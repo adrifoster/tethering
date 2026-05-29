@@ -7,14 +7,12 @@
 
 set -euo pipefail
 
-if [ $# -lt 2 ]; then
-    echo "ERROR: please specify root_dir and case_dir"
+if [ $# -lt 1 ]; then
+    echo "ERROR: please specify a case_root"
     exit 1
 fi
 
-root_dir="$1"
-case_dir="$2"
-case_root="${root_dir}/${case_dir}"
+case_root="$1"
 
 # create a dummy case directory
 mkdir -p "${case_root}"

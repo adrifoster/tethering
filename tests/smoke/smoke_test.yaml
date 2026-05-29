@@ -4,7 +4,7 @@
 #   export TETHERING_REPO=/path/to/tethering
 #   bash $TETHERING_REPO/tests/smoke/submit_smoke_test.sh
  
-root: $TETHERING_REPO/tests/smoke
+root: $TETHERING_REPO/tests/smoke/cases
 run_id: smoke_ABBY                      
  
 stages:
@@ -14,7 +14,7 @@ stages:
     queue: develop
     ncpus: 1
     select: 1                                
-    memory: 1GB                           
+    memory: 5GB                           
     kind: ad
  
   - name: spinup_sasu
@@ -23,7 +23,7 @@ stages:
     queue: develop
     ncpus: 1
     select: 1
-    memory: 1GB
+    memory: 5GB
     kind: sasu
  
   - name: spinup_postad
@@ -32,7 +32,7 @@ stages:
     queue: main
     ncpus: 1
     select: 1
-    memory: 1GB
+    memory: 5GB
     kind: post-sasu
  
   - name: smoke_check
@@ -41,5 +41,5 @@ stages:
     queue: develop
     ncpus: 1
     select: 1
-    memory: 1GB
+    memory: 5GB
     kind: custom

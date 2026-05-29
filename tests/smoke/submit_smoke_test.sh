@@ -7,7 +7,7 @@
 #   bash $TETHERING_REPO/tests/smoke/submit_smoke_test.sh
 #
 # Results:
-#   Check with: python tests/smoke/check_smoke_test.py <root>
+#   Check with: python $TETHERING_REPO/tests/smoke/check_smoke_test.py <root>
 #   where <root> is the root printed by this script.
 
 set -euo pipefail
@@ -29,6 +29,7 @@ clm-run --create --config "${CONFIG}"
 # grab root from config
 ROOT=$(python3 -c "import yaml; print(yaml.safe_load(open('${CONFIG}'))['root'])")
 ROOT=$(echo $ROOT | envsubst)
+
 
 clm-run --root "${ROOT}" --submit
 

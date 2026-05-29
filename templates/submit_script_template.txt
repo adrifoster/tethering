@@ -10,6 +10,11 @@
 #PBS -M {user}
 
 {depend_line}{extra}
+
+# activate conda environment
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate tethering
+
 set -euo pipefail
  
 trap 'clm-run --root {root} --fail --stage {name}' ERR
@@ -19,7 +24,7 @@ echo "=== Started: $(date) ==="
  
 # create, configure, and build the CIME case
 # strict mode is enforced even if the user's script doesn't set it
-bash -c 'set -euo pipefail; source "$0" "$@"' {script} {root} {run_id}_{name} {previous_case}
+bash -c 'set -euo pipefail; source "$0" "$@"' {script} {case_root} {previous_case}
  
 # submit the CIME case; capture the final job ID (short-term archiver)
 cd {case_root}
