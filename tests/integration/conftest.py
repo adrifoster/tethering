@@ -4,10 +4,13 @@ from pathlib import Path
 
 from tethering.model_run import ModelRun
 
-pbs = pytest.mark.skipif(
-  shutil.which("qsub") is None,
-  reason="PBS not available - run on a cluster"
-)
+def pytest_collection_modifyitems(items):
+    """Auto-skip PBS tests when qsub is not available."""
+    skip_pbs = pytest.mark.skip(reason="PBS not available — run on cluster")
+    for item in items:
+        if "pbs" in item.keywords:
+            if shutil.which("qsub") is None:
+                item.add_marker(skip_pbs)
 
 @pytest.fixture
 def script_file(tmp_path) -> Path:
@@ -24,7 +27,7 @@ def ad_config_dict(script_file) -> dict:
         "name": "spinup_ad",
         "script": str(script_file),
         "walltime": "06:00:00",
-        "queue": "regular",
+        "queue": "develop",
         "kind": "ad",
     }
 
@@ -46,3 +49,14 @@ def created_run(run_config_dict) -> ModelRun:
 def mock_qsub(mocker):
     mock = mocker.patch.object(ModelRun, "_qsub", return_value="12345.pbs")
     return mock
+
+@pytest.fixture
+def integration_run(tmp_path, ad_config_dict):
+    """A ModelRun with a real Derecho project code for integration tests."""
+    return ModelRun.create({
+        "root": str(tmp_path / "myrun"),
+        "run_id": "member_0001",
+        "project": "",
+        "user": "",
+        "stages": [ad_config_dict],
+    })

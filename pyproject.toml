@@ -25,6 +25,9 @@ tethering = ["templates/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]
+markers = [
+    "pbs: marks tests that require a PBS scheduler (deselect with '-m not pbs')",
+]
 
 [tool.black]
 target-version = ["py310", "py311", "py312"]
