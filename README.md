@@ -134,6 +134,8 @@ bash <script> <case_root> <optional_previous_case_root>
 > [!WARNING]
 > DOT NOT add `./case.submit` to the end of your scripts!
 
+The tethering pipeline takes care of this.
+
 An example pipeline can be found in `tests/smoke`:
 
 `smoke_test.yaml`: an example run.yaml file that can be used to create the `ModelRun` instance.
