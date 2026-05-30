@@ -307,13 +307,13 @@ class StageConfig:
 
     name: str
     script: Path
-    walltime: str
     queue: str
+    walltime: str = "01:00:00"
     kind: StageKind = StageKind.CUSTOM
     spinup_check: bool = False
     ncpus: int = 1
     select: int = 1
-    memory: str = "1GB"
+    memory: str = "10GB"
     extra_pbs: tuple[str, ...] = ()
 
     def __post_init__(self):

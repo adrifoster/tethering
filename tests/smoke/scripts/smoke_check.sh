@@ -32,5 +32,5 @@ EOF
 chmod +x "${case_root}/xmlquery"
 
 # write smoke test result
-echo "PASSED" > "${root_dir}/smoke_result.txt"
+echo "PASSED" > "${case_root}/../smoke_result.txt"
 echo "Smoke test pipeline complete: $(date)"
