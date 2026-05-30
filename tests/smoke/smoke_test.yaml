@@ -9,37 +9,18 @@ run_id: smoke_ABBY
  
 stages:
   - name: spinup_ad
-    script: $TETHERING_REPO/tests/smoke/scripts/run_job_ad.sh
-    walltime: "01:00:00"                    
+    script: $TETHERING_REPO/tests/smoke/scripts/run_job_ad.sh             
     queue: develop
-    ncpus: 1
-    select: 1                                
-    memory: 5GB                           
-    kind: ad
- 
+
   - name: spinup_sasu
     script: $TETHERING_REPO/tests/smoke/scripts/run_job_sasu.sh
-    walltime: "01:00:00"
     queue: develop
-    ncpus: 1
-    select: 1
-    memory: 5GB
-    kind: sasu
  
   - name: spinup_postad
     script: $TETHERING_REPO/tests/smoke/scripts/run_job_postad.sh
-    walltime: "01:00:00"
-    queue: main
-    ncpus: 1
-    select: 1
-    memory: 5GB
-    kind: post-sasu
+    queue: develop
  
   - name: smoke_check
     script: $TETHERING_REPO/tests/smoke/scripts/smoke_check.sh
-    walltime: "00:10:00"
     queue: develop
-    ncpus: 1
-    select: 1
-    memory: 5GB
-    kind: custom
+    no_cime: True

@@ -433,7 +433,12 @@ class ModelRun:
 
         log_file = self.root / f"{job_name}.log"
 
-        template = _load_template(_TEMPLATES / "submit_script_template.txt")
+        template_name = (
+            "no_cime_script_template.txt"
+            if stage.config.no_cime
+            else "submit_script_template.txt"
+        )
+        template = _load_template(_TEMPLATES / template_name)
         template = template.format(
             job_name=job_name,
             queue=stage.config.queue,

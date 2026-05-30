@@ -15,8 +15,10 @@ then
 fi
 case_root="$1"
 
-rm -rf ${OUT_DIR}/${case_root}
-rm -rf ${OUT_DIR}/archive/${case_root}
+rm -rf ${case_root}
+case_name=$(basename "$case_root")
+rm -rf ${OUT_DIR}/${case_name}
+rm -rf ${OUT_DIR}/archive/${case_name}
 
 user_mods=${SRC_DIR}/cime_config/usermods_dirs/clm/NEON/${SITE}
 

@@ -49,23 +49,13 @@ project: PXXXXXXX           # PBS project code
 user: auser                 # PBS username
 
 stages:
-  - name: spinup_ad
+  - name: spinup_ad               # name of stage - will be used for job and case names
     script: /path/to/setup_ad.sh  # path to your setup script for this stage
-    walltime: "01:00:00"          # walltime for JUST the setup script
-    queue: develop
-    ncpus: 1                      # ncpus for setup only (not the CIME run)
-    select: 1                     # select for setup only (not the CIME run)
-    memory: 10GB                  # memory for setup only (not the CIME run)
-    kind: ad                      # kind (see below)
+    queue: develop                # PBS queue
 
   - name: spinup_sasu
     script: /path/to/setup_sasu.sh
-    walltime: "1:00:00"
     queue: develop
-    ncpus: 1
-    select: 1
-    memory: 10GB
-    kind: sasu
 ```
 
 ### 2. Initialise the run
@@ -141,17 +131,13 @@ Each stage requires a setup script that creates, configures, and builds the CLM 
 bash <script> <case_root> <optional_previous_case_root>
 ```
 
-The script should not call `./case.submit`. The tethering pipeline handles that.
+> [!WARNING]
+> DOT NOT add `./case.submit` to the end of your scripts!
 
 An example pipeline can be found in `tests/smoke`:
 
 `smoke_test.yaml`: an example run.yaml file that can be used to create the `ModelRun` instance.
 `scripts/`: directory with four scripts: `run_job_ad.sh`, `run_job_sasu.sh`, `run_job_postad.sh`, and `smoke_check.sh`. The first three can be used as example scripts to create your own setup scripts.
-
-> [!WARNING]
-> DOT NOT add `./case.submit` to the end of your scripts!
-
-Also, in the example script you will see several lines which will cause the script to error. This is intentional, and should be replicated in your own scripts if possible. `clm-run` will capture those errors and `FAIL` your stage, allowing you to determine if a stage has died.
 
 ----
 

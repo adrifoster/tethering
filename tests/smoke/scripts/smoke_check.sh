@@ -11,26 +11,9 @@ if [ $# -lt 1 ]; then
     echo "ERROR: please specify a case_root"
     exit 1
 fi
-
 case_root="$1"
-
-# create a dummy case directory
-mkdir -p "${case_root}"
-
-# dummy case.submit — just exits 0
-cat > "${case_root}/case.submit" << 'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-chmod +x "${case_root}/case.submit"
-
-# dummy xmlquery — returns a fake jobID
-cat > "${case_root}/xmlquery" << 'EOF'
-#!/usr/bin/env bash
-echo "DUMMY:99999.pbs"
-EOF
-chmod +x "${case_root}/xmlquery"
+root_dir=$(dirname "${case_root}")
 
 # write smoke test result
-echo "PASSED" > "${case_root}/../smoke_result.txt"
+echo "PASSED" > "${root_dir}/smoke_result.txt"
 echo "Smoke test pipeline complete: $(date)"
