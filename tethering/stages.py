@@ -314,6 +314,7 @@ class StageConfig:
     ncpus: int = 1
     select: int = 1
     memory: str = "10GB"
+    no_cime: bool = False
     extra_pbs: tuple[str, ...] = ()
 
     def __post_init__(self):

@@ -21,7 +21,6 @@ def minimal_config_dict(script_file) -> dict:
     return {
         "name": "spinup_ad",
         "script": str(script_file),
-        "walltime": "06:00:00",
         "queue": "regular",
     }
 
@@ -32,10 +31,10 @@ def ad_config_dict(script_file) -> dict:
     return {
         "name": "spinup_ad",
         "script": str(script_file),
-        "walltime": "06:00:00",
         "queue": "regular",
         "kind": "ad",
     }
+
 
 @pytest.fixture
 def postad_config_dict(script_file) -> dict:
@@ -43,10 +42,10 @@ def postad_config_dict(script_file) -> dict:
     return {
         "name": "spinup_sasu",
         "script": str(script_file),
-        "walltime": "06:00:00",
         "queue": "regular",
         "kind": "sasu",
     }
+
 
 @pytest.fixture
 def full_config_dict(minimal_config_dict) -> dict:
@@ -54,11 +53,23 @@ def full_config_dict(minimal_config_dict) -> dict:
     return {
         **minimal_config_dict,
         "kind": "ad",
-        "spinup_check": True,
-        "ncpus": 32,
-        "select": 4,
-        "memory": "64GB",
+        "walltime": "06:00:00",
+        "spinup_check": False,
+        "ncpus": 1,
+        "select": 1,
+        "memory": "24GB",
+        "no_cime": False,
         "extra_pbs": ["#PBS -l gpu=1"],
+    }
+
+
+@pytest.fixture
+def no_cime_config_dict(minimal_config_dict) -> dict:
+    """Full flat dict for StageConfig with no_cime set to True."""
+    return {
+        **minimal_config_dict,
+        "kind": "ad",
+        "no_cime": True,
     }
 
 
@@ -114,6 +125,7 @@ def created_run(run_config_dict) -> ModelRun:
 def mock_qsub(mocker):
     mock = mocker.patch.object(ModelRun, "_qsub", return_value="12345.pbs")
     return mock
+
 
 @pytest.fixture
 def two_stage_run(tmp_path, ad_config_dict, postad_config_dict):

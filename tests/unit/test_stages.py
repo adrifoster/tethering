@@ -329,6 +329,24 @@ def test_stage_config_from_dict_defaults_kind_to_custom(minimal_config_dict):
     assert stage_config.kind is StageKind.CUSTOM
 
 
+def test_stage_config_from_dict_defaults_memory_to_10gb(minimal_config_dict):
+    """Test that StageConfig initiated without memory defaults to 10GB"""
+    stage_config = StageConfig.from_dict(minimal_config_dict)
+    assert stage_config.memory == "10GB"
+
+
+def test_stage_config_from_dict_defaults_no_cime_to_false(minimal_config_dict):
+    """Test that StageConfig initiated without no_cime defaults to False"""
+    stage_config = StageConfig.from_dict(minimal_config_dict)
+    assert stage_config.no_cime == False
+
+
+def test_stage_config_from_dict_no_cime_read(no_cime_config_dict):
+    """Test that StageConfig gets no_cime correctly"""
+    stage_config = StageConfig.from_dict(no_cime_config_dict)
+    assert stage_config.no_cime == True
+
+
 def test_stage_config_from_dict_does_not_mutate_input(minimal_config_dict):
     """Test that initializing StageConfig doesn't mutate the input"""
     copy = dict(minimal_config_dict)
