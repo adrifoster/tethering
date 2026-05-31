@@ -13,8 +13,8 @@ CLM cases are typically submitted as independent PBS jobs. Tethering chains them
 Each "stage" will consist of three PBS jobs:
 
 1. **Setup job**: runs the user's setup script, submits the CESM case, and then uses `clm-run` to run `submit-advance`, grabbing the PBS job ID from the case.
-2. **CIME job**: actual model run, submitted with `./case.submit --resubmit-immediate`
-3. **Advance job**: lightweight bookkeepting job that runs `afterok` the CIME job; this just marks the stage complete and then submits the next stage's setup script.
+2. **CIME job**: actual model run, submitted with `./case.submit --resubmit-immediate` by the pipeline.
+3. **Advance job**: lightweight bookkeeping job that runs `afterok` the CIME job; this just marks the stage complete and then submits the next stage's setup script.
 
 Thus, only the first stage needs to be manually submitted. The rest of the pipeline will run automatically.
 

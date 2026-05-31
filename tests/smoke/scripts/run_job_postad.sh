@@ -44,8 +44,8 @@ ref_date=${last_date%-*}
 ./xmlchange --subgroup case.run JOB_WALLCLOCK_TIME=01:00:00
 ./xmlchange --subgroup case.st_archive JOB_WALLCLOCK_TIME=01:00:00
 ./xmlchange STOP_OPTION="ndays"
-./xmlchange STOP_N=100
-./xmlchange RESUBMIT=1
+./xmlchange STOP_N=10
+./xmlchange RESUBMIT=0
 
 ./xmlchange CLM_ACCELERATED_SPINUP="off"
 ./xmlchange CLM_FORCE_COLDSTART=off

@@ -165,7 +165,7 @@ class StageState:
         return self._submit_time
 
     @submit_time.setter
-    def submit_time(self, value: float):
+    def submit_time(self, value: float | None):
         """Set the submit time
 
         Args:
@@ -188,7 +188,7 @@ class StageState:
         return self._end_time
 
     @end_time.setter
-    def end_time(self, value: float):
+    def end_time(self, value: float | None):
         """Set the end time
 
         Args:
@@ -199,7 +199,7 @@ class StageState:
                 "cannot set end_time when submit_time is None "
                 "a stage cannot finish before it starts."
             )
-        if value < self._submit_time:
+        if value and value < self._submit_time:
             raise ValueError(
                 f"end_time ({value}) cannot precede "
                 f"submit_time ({self._submit_time})."
@@ -358,6 +358,7 @@ class StageConfig:
             "ncpus": self.ncpus,
             "select": self.select,
             "memory": self.memory,
+            "no_cime": self.no_cime,
             "extra_pbs": list(self.extra_pbs),
         }
 

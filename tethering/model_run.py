@@ -379,6 +379,7 @@ class ModelRun:
                 "— can only retry PENDING or FAILED stages."
             )
         stage.status.status = StageStatus.PENDING
+        stage.status.end_time = None
         self.save()
         return self._submit_stage(stage, dry_run=dry_run)
 
