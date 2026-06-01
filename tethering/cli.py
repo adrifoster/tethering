@@ -83,9 +83,12 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
         if not args.config:
             parser.error("--config is required with --create")
         return
+    
+    # --root is required for all non-create actions
     if not args.root:
         parser.error("--root is required")
 
+    # per-action checks for actions that need additional arguments
     if args.submit_advance:
         if not args.stage:
             parser.error("--stage is required with --submit-advance")
@@ -114,6 +117,7 @@ def dispatch(args: argparse.Namespace) -> int:
         print(f"Next step:  clm-run --root {run.root} --submit")
         return 0
 
+    # all remaining actions require an existing run
     run = ModelRun.load(Path(args.root))
 
     if args.print_status:
@@ -141,7 +145,9 @@ def dispatch(args: argparse.Namespace) -> int:
         job_id = run.retry(args.stage, dry_run=args.dry_run)
         if job_id:
             print(f"Resubmitted: {job_id}")
-
+            
+    else:
+        raise RuntimeError(f"Unhandled action — this is a bug in dispatch()")
     return 0
 
 
