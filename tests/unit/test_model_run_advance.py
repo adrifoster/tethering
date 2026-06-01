@@ -69,21 +69,19 @@ def test_advance_last_stage_returns_none(two_stage_run, mock_qsub):
 
 
 def test_advance_last_stage_does_not_call_qsub(two_stage_run, mock_qsub):
-    """Test that advance() does not call qsub when the last stage completes"""
-    two_stage_run.stages[0].state.status = StageStatus.SUBMITTED
-    two_stage_run.stages[0].state.status = StageStatus.DONE
-    two_stage_run.stages[1].state.status = StageStatus.SUBMITTED
-    two_stage_run.stages[1].state.submit_time = time.time() - 100
+    """Test that advance() does not call qsub when the last stage completes"""    
+    object.__setattr__(two_stage_run.stages[0].state, "_status", StageStatus.DONE)
+    object.__setattr__(two_stage_run.stages[1].state, "_status", StageStatus.SUBMITTED)
+    object.__setattr__(two_stage_run.stages[1].state, "_submit_time", time.time() - 100)
     two_stage_run.advance("spinup_sasu")
     mock_qsub.assert_not_called()
 
 
 def test_advance_last_stage_still_marks_done(two_stage_run, mock_qsub):
     """Test that advance() marks the last stage DONE even with no next stage"""
-    two_stage_run.stages[0].state.status = StageStatus.SUBMITTED
-    two_stage_run.stages[0].state.status = StageStatus.DONE
-    two_stage_run.stages[1].state.status = StageStatus.SUBMITTED
-    two_stage_run.stages[1].state.submit_time = time.time() - 100
+    object.__setattr__(two_stage_run.stages[0].state, "_status", StageStatus.DONE)
+    object.__setattr__(two_stage_run.stages[1].state, "_status", StageStatus.SUBMITTED)
+    object.__setattr__(two_stage_run.stages[1].state, "_submit_time", time.time() - 100)
     two_stage_run.advance("spinup_sasu")
     assert two_stage_run.stages[1].state.status is StageStatus.DONE
 

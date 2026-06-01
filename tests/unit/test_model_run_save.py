@@ -61,3 +61,24 @@ def test_load_config_expands_env_vars(tmp_path, run_config_dict, monkeypatch):
     yaml_path.write_text(yaml.dump(run_config_dict))
     run = ModelRun.create(yaml_path)
     assert run.root == tmp_path / "myrun"
+
+
+def test_save_content_structure(created_run):
+    """Test that the state file contains all expected top-level keys
+    with correct types"""
+    state = json.loads((created_run.root / "run_state.json").read_text())
+    assert state["run_id"] == created_run.run_id
+    assert state["user"] == created_run.user
+    assert state["project"] == created_run.project
+    assert isinstance(state["stages"], list)
+    assert len(state["stages"]) == len(created_run.stages)
+    assert "root" not in state
+
+
+def test_save_stage_content(created_run):
+    """Test that each stage in the state file contains expected keys"""
+    state = json.loads((created_run.root / "run_state.json").read_text())
+    stage_dict = state["stages"][0]
+    assert stage_dict["name"] == created_run.stages[0].config.name
+    assert stage_dict["status"] == created_run.stages[0].state.status.to_str()
+    assert isinstance(stage_dict["script"], str)  # not a Path object

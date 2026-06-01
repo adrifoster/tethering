@@ -66,9 +66,9 @@ class ModelRun:
                 "Only letters, digits, hyphens, and underscores are allowed."
             )
         if not self.user:
-            raise ValueError("user must not be empty.")
+            raise ValueError("user must not be empty and $USER environment variable not set.")
         if not self.project:
-            raise ValueError("project must not be empty.")
+            raise ValueError("project must not be empty and $PROJECT environment variable not set.")
         if not self.stages:
             raise ValueError("stages must not be empty")
 
@@ -158,8 +158,13 @@ class ModelRun:
             "stages": [stage.to_dict() for stage in self.stages],
         }
         tmp = self.root / f"{_STATE_FILE}.tmp"
-        tmp.write_text(json.dumps(state, indent=2, default=str), encoding="utf-8")
+        tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
         tmp.rename(self.root / _STATE_FILE)
+        
+    @property
+    def stage_names(self) -> list[str]:
+        """Get list of stage names"""
+        return [stage.config.name for stage in self.stages]
 
     @property
     def current_stage(self) -> Stage | None:
@@ -182,9 +187,8 @@ class ModelRun:
         Returns:
             Stage: stage
         """
-        names = [stage.config.name for stage in self.stages]
         try:
-            idx = names.index(name)
+            idx = self.stage_names.index(name)
         except ValueError as exc:
             raise ValueError(
                 f"No stage named {name!r}. "
@@ -204,12 +208,11 @@ class ModelRun:
         Returns:
             Stage | None: next Stage, or None if no more stages
         """
-        names = [stage.config.name for stage in self.stages]
         try:
-            idx = names.index(after)
+            idx = self.stage_names.index(after)
         except ValueError as exc:
             raise ValueError(
-                f"No stage named {after!r}. " f"Known stages: {names}"
+                f"No stage named {after!r}. " f"Known stages: {self.stage_names}"
             ) from exc
         return self.stages[idx + 1] if idx + 1 < len(self.stages) else None
     
@@ -217,7 +220,7 @@ class ModelRun:
         """Get the previous stage given an input name
 
         Args:
-            after (str): stage before the stage we want
+            before (str): stage before the stage we want
 
         Raises:
             ValueError: Can't find supplied stage
@@ -225,12 +228,11 @@ class ModelRun:
         Returns:
             Stage | None: previous Stage, or None if first stage
         """
-        names = [stage.config.name for stage in self.stages]
         try:
-            idx = names.index(before)
+            idx = self.stage_names.index(before)
         except ValueError as exc:
             raise ValueError(
-                f"No stage named {before!r}. " f"Known stages: {names}"
+                f"No stage named {before!r}. " f"Known stages: {self.stage_names}"
             ) from exc
         return self.stages[idx - 1] if idx > 0 else None
 
@@ -255,7 +257,7 @@ class ModelRun:
         }
         lines = [f"Run: {self.run_id} ({self.root})"]
         for stage in self.stages:
-            icon = icons.get(stage.state.status, "?")
+            icon = icons[stage.state.status]
             job = f" [{stage.state.job_id}]" if stage.state.job_id else ""
             # only show attempts if the stage has been retried at least once
             attempts = (
@@ -268,7 +270,7 @@ class ModelRun:
             )
         return "\n".join(lines)
 
-    def submit(self, dry_run: bool = False) -> str:
+    def submit(self, dry_run: bool = False) -> str | None:
         """Submit the first pending stage.
 
         Args:
@@ -283,7 +285,7 @@ class ModelRun:
             print(
                 f"  {self.run_id}: skipping submit (first stage is {first.state.status.value})"
             )
-            return first.state.job_id or ""
+            return first.state.job_id or None
         return self._submit_stage(first, dry_run=dry_run)
 
     def fail(self, stage_name: str):
@@ -380,25 +382,30 @@ class ModelRun:
             )
         stage.state.status = StageStatus.PENDING
         stage.state.end_time = None
+        stage.state.submit_time = None
+        stage.state.job_id = None
         self.save()
         return self._submit_stage(stage, dry_run=dry_run)
 
     def _submit_stage(
         self, stage: Stage, depend_job_id: str | None = None, dry_run: bool = False
     ) -> str:
+        
+        # validation and submission
         stage.config.validate()
         if stage.state.status not in (StageStatus.PENDING, StageStatus.FAILED):
             raise ValueError(
                 f"Stage {stage.config.name!r} is {stage.state.status.value} "
                 "- can only submit PENDING or FAILED stages."
             )
-        
         job_file = self._write_job_script(stage, depend_job_id)
         job_id = (
             f"DRY_{self.run_id}_{stage.config.name}"
             if dry_run
             else self._qsub(job_file)
         )
+        
+        # record successful submission
         stage.state.job_id = job_id
         stage.state.status = StageStatus.SUBMITTED
         stage.state.submit_time = time.time()
@@ -565,7 +572,7 @@ def _load_template(template_path: Path) -> str:
         FileNotFoundError: Template file not found
 
     Returns:
-        Path: template path
+        str: template string
     """
     if not template_path.exists():
         raise FileNotFoundError(f"Template '{template_path}' not found.")

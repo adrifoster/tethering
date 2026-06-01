@@ -21,6 +21,9 @@ def test_retry_resets_to_pending_before_submitting(created_run, mocker):
 
     def check_status(stage, dry_run=False):
         assert stage.state.status is StageStatus.PENDING
+        assert stage.state.end_time is None
+        assert stage.state.submit_time is None
+        assert stage.state.job_id is None
         return "12345.pbs"
 
     mocker.patch.object(created_run, "_submit_stage", side_effect=check_status)

@@ -188,12 +188,12 @@ def test_submit_returns_existing_job_id_when_skipping(created_run, mock_qsub):
     assert created_run.submit() == "existing.pbs"
 
 
-def test_submit_returns_empty_string_when_skipping_with_no_job_id(
+def test_submit_returns_none_when_skipping_with_no_job_id(
     created_run, mock_qsub
 ):
     """Test that ModelRun.submit() returns empty string when skipping a stage with no job ID"""
     created_run.stages[0].state.status = StageStatus.SUBMITTED
-    assert created_run.submit() == ""
+    assert created_run.submit() is None
 
 
 def test_submit_does_not_mutate_stage_when_skipping(created_run, mock_qsub):
@@ -251,3 +251,12 @@ def test_submit_qsub_failure_does_not_persist(created_run, mocker):
         created_run.submit()
     loaded = ModelRun.load(created_run.root)
     assert loaded.stages[0].state.status is StageStatus.PENDING
+
+def test_submit_qsub_failure_does_not_increment_attempts(created_run, mocker):
+    """Test that a qsub failure does not increment attempts"""
+    mocker.patch.object(
+        created_run, "_qsub", side_effect=subprocess.CalledProcessError(1, "qsub")
+    )
+    with pytest.raises(subprocess.CalledProcessError):
+        created_run.submit()
+    assert created_run.stages[0].state.attempts == 0

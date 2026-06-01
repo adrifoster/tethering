@@ -1,3 +1,5 @@
+"""Tests for ModelRun properties"""
+
 from __future__ import annotations
 
 import pytest
