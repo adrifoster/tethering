@@ -8,6 +8,7 @@ import pytest
 
 from tethering.model_run import ModelRun
 from tethering.stages import StageStatus
+from jinja2 import TemplateNotFound
 
 
 def test_submit_writes_jobscript(created_run, mock_qsub):
@@ -19,8 +20,8 @@ def test_submit_writes_jobscript(created_run, mock_qsub):
 
 def test_submit_raises_if_template_missing(created_run, mocker):
     """Test that submit() raises if the PBS template file is missing"""
-    mocker.patch("tethering.model_run._TEMPLATES", created_run.root / "nonexistent")
-    with pytest.raises(FileNotFoundError, match="not found"):
+    mocker.patch("tethering.model_run._ENV.get_template", side_effect=TemplateNotFound("setup_script_template.txt"))
+    with pytest.raises(TemplateNotFound):
         created_run.submit()
 
 
