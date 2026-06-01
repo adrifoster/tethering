@@ -169,7 +169,7 @@ class ModelRun:
             Stage | None: Stage, or None if all complete
         """
         for stage in self.stages:
-            if stage.status.status != StageStatus.DONE:
+            if stage.state.status != StageStatus.DONE:
                 return stage
         return None
 
@@ -255,16 +255,16 @@ class ModelRun:
         }
         lines = [f"Run: {self.run_id} ({self.root})"]
         for stage in self.stages:
-            icon = icons.get(stage.status.status, "?")
-            job = f" [{stage.status.job_id}]" if stage.status.job_id else ""
+            icon = icons.get(stage.state.status, "?")
+            job = f" [{stage.state.job_id}]" if stage.state.job_id else ""
             # only show attempts if the stage has been retried at least once
             attempts = (
-                f" attempts={stage.status.attempts}"
-                if stage.status.attempts > 1
+                f" attempts={stage.state.attempts}"
+                if stage.state.attempts > 1
                 else ""
             )
             lines.append(
-                f" {icon} {stage.config.name:<20}  {stage.status.status.value:<10}{job}{attempts}"
+                f" {icon} {stage.config.name:<20}  {stage.state.status.value:<10}{job}{attempts}"
             )
         return "\n".join(lines)
 
@@ -279,11 +279,11 @@ class ModelRun:
             str: PBS job ID of the submit script
         """
         first = self.stages[0]
-        if first.status.status != StageStatus.PENDING:
+        if first.state.status != StageStatus.PENDING:
             print(
-                f"  {self.run_id}: skipping submit (first stage is {first.status.status.value})"
+                f"  {self.run_id}: skipping submit (first stage is {first.state.status.value})"
             )
-            return first.status.job_id or ""
+            return first.state.job_id or ""
         return self._submit_stage(first, dry_run=dry_run)
 
     def fail(self, stage_name: str):
@@ -293,13 +293,13 @@ class ModelRun:
             stage_name (str): stage name
         """
         stage = self._stage(stage_name)
-        if stage.status.status not in (StageStatus.SUBMITTED, StageStatus.DONE):
+        if stage.state.status not in (StageStatus.SUBMITTED, StageStatus.DONE):
             raise ValueError(
-                f"Stage {stage.config.name!r} is {stage.status.status.value} "
+                f"Stage {stage.config.name!r} is {stage.state.status.value} "
                 "- can only fail SUBMITTED or DONE stages."
             )
-        stage.status.status = StageStatus.FAILED
-        stage.status.end_time = time.time()
+        stage.state.status = StageStatus.FAILED
+        stage.state.end_time = time.time()
         self.save()
         print(f"  {self.run_id} / {stage_name}: FAILED")
 
@@ -342,13 +342,13 @@ class ModelRun:
             str | None: PBS job ID of the advance script, or None if all stages complete
         """
         stage = self._stage(completed_stage_name)
-        if stage.status.status != StageStatus.SUBMITTED:
+        if stage.state.status != StageStatus.SUBMITTED:
             raise ValueError(
-                f"Stage {stage.config.name!r} is {stage.status.status.value} "
+                f"Stage {stage.config.name!r} is {stage.state.status.value} "
                 "— can only advance SUBMITTED stages."
             )
-        stage.status.status = StageStatus.DONE
-        stage.status.end_time = time.time()
+        stage.state.status = StageStatus.DONE
+        stage.state.end_time = time.time()
         self.save()
         print(f"  {self.run_id} / {completed_stage_name}: DONE")
 
@@ -373,34 +373,36 @@ class ModelRun:
         if stage is None:
             print(f"  {self.run_id}: nothing to retry")
             return None
-        if stage.status.status not in (StageStatus.PENDING, StageStatus.FAILED):
+        if stage.state.status not in (StageStatus.PENDING, StageStatus.FAILED):
             raise ValueError(
-                f"Stage {stage.config.name!r} is {stage.status.status.value} "
+                f"Stage {stage.config.name!r} is {stage.state.status.value} "
                 "— can only retry PENDING or FAILED stages."
             )
-        stage.status.status = StageStatus.PENDING
-        stage.status.end_time = None
+        stage.state.status = StageStatus.PENDING
+        stage.state.end_time = None
         self.save()
         return self._submit_stage(stage, dry_run=dry_run)
 
     def _submit_stage(
         self, stage: Stage, depend_job_id: str | None = None, dry_run: bool = False
     ) -> str:
-        if stage.status.status not in (StageStatus.PENDING, StageStatus.FAILED):
+        stage.config.validate()
+        if stage.state.status not in (StageStatus.PENDING, StageStatus.FAILED):
             raise ValueError(
-                f"Stage {stage.config.name!r} is {stage.status.status.value} "
+                f"Stage {stage.config.name!r} is {stage.state.status.value} "
                 "- can only submit PENDING or FAILED stages."
             )
+        
         job_file = self._write_job_script(stage, depend_job_id)
         job_id = (
             f"DRY_{self.run_id}_{stage.config.name}"
             if dry_run
             else self._qsub(job_file)
         )
-        stage.status.job_id = job_id
-        stage.status.status = StageStatus.SUBMITTED
-        stage.status.submit_time = time.time()
-        stage.status.increment_attempts()
+        stage.state.job_id = job_id
+        stage.state.status = StageStatus.SUBMITTED
+        stage.state.submit_time = time.time()
+        stage.state.increment_attempts()
         self.save()
         print(f"{self.run_id} / {stage.config.name}: submitted {job_id}")
         return job_id

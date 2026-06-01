@@ -39,12 +39,12 @@ def test_model_run_state_file_does_not_contain_root(created_run):
 
 def test_model_run_roundtrip_preserves_stage_runtime_state(created_run):
     """Mutate runtime state, save, reload — changes must survive."""
-    created_run.stages[0].status.status = StageStatus.SUBMITTED
-    created_run.stages[0].status.job_id = "99999.pbs"
+    created_run.stages[0].state.status = StageStatus.SUBMITTED
+    created_run.stages[0].state.job_id = "99999.pbs"
     created_run.save()
     loaded = ModelRun.load(created_run.root)
-    assert loaded.stages[0].status.status is StageStatus.SUBMITTED
-    assert loaded.stages[0].status.job_id == "99999.pbs"
+    assert loaded.stages[0].state.status is StageStatus.SUBMITTED
+    assert loaded.stages[0].state.job_id == "99999.pbs"
 
 
 def test_model_run_load_missing_state_file_raises(tmp_path):

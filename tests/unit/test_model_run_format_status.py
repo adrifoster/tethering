@@ -38,13 +38,13 @@ def test_format_status_contains_status_value(created_run):
 )
 def test_format_status_correct_icon(created_run, status, icon):
     """Test that format_status() uses the correct icon for each status"""
-    created_run.stages[0].status.status = status
+    object.__setattr__(created_run.stages[0].state, "_status", status)
     assert icon in created_run.format_status()
 
 
 def test_format_status_job_id_shown_when_present(created_run):
     """Test that format_status() shows the job ID when set"""
-    created_run.stages[0].status.job_id = "12345.pbs"
+    created_run.stages[0].state.job_id = "12345.pbs"
     assert "12345.pbs" in created_run.format_status()
 
 
@@ -55,14 +55,14 @@ def test_format_status_job_id_not_shown_when_absent(created_run):
 
 def test_format_status_attempts_not_shown_on_first_submission(created_run):
     """Test that format_status() omits attempts on the first submission"""
-    created_run.stages[0].status.increment_attempts()
+    created_run.stages[0].state.increment_attempts()
     assert "attempts=" not in created_run.format_status()
 
 
 def test_format_status_attempts_shown_after_retry(created_run):
     """Test that format_status() shows attempts when greater than 1"""
-    created_run.stages[0].status.increment_attempts()
-    created_run.stages[0].status.increment_attempts()
+    created_run.stages[0].state.increment_attempts()
+    created_run.stages[0].state.increment_attempts()
     assert "attempts=2" in created_run.format_status()
 
 

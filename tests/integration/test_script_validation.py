@@ -29,8 +29,8 @@ def test_submit_script_passes_bash_validation(created_run, mock_qsub):
 
 def test_submit_advance_script_passes_bash_validation(created_run, mock_qsub):
     """Test that ModelRun.submit_advance() script passes bash -n validation"""
-    created_run.stages[0].status.status = StageStatus.SUBMITTED
-    created_run.stages[0].status.submit_time = time.time() - 100
+    created_run.stages[0].state.status = StageStatus.SUBMITTED
+    created_run.stages[0].state.submit_time = time.time() - 100
     created_run.submit_advance("spinup_ad", "55555.deched")
     job_file = created_run.root / f"{created_run.run_id}_spinup_ad_advance.pbs"
     result = subprocess.run(

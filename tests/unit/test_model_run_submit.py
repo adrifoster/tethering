@@ -113,34 +113,34 @@ def test_submit_script_correct_clm_run_submit_advance(
 def test_submit_stage_status_set_to_submitted(created_run, mock_qsub):
     """Test that ModelRun.submit() sets the first stage status to SUBMITTED"""
     created_run.submit()
-    assert created_run.stages[0].status.status is StageStatus.SUBMITTED
+    assert created_run.stages[0].state.status is StageStatus.SUBMITTED
 
 
 def test_submit_stage_job_id_set(created_run, mock_qsub):
     """Test that ModelRun.submit() stores the job ID returned by qsub on the stage"""
     created_run.submit()
-    assert created_run.stages[0].status.job_id == "12345.pbs"
+    assert created_run.stages[0].state.job_id == "12345.pbs"
 
 
 def test_submit_stage_attempts_incremented(created_run, mock_qsub):
     """Test that ModelRun.submit() increments attempts on the stage"""
     created_run.submit()
-    assert created_run.stages[0].status.attempts == 1
+    assert created_run.stages[0].state.attempts == 1
 
 
 def test_submit_stage_submit_time_set(created_run, mock_qsub):
     """Test that ModelRun.submit() sets submit_time on the stage"""
     created_run.submit()
-    assert created_run.stages[0].status.submit_time is not None
+    assert created_run.stages[0].state.submit_time is not None
 
 
 def test_submit_state_persisted_to_disk(created_run, mock_qsub):
     """Test that ModelRun.submit() persists updated stage state to disk"""
     created_run.submit()
     loaded = ModelRun.load(created_run.root)
-    assert loaded.stages[0].status.job_id == "12345.pbs"
-    assert loaded.stages[0].status.status is StageStatus.SUBMITTED
-    assert loaded.stages[0].status.attempts == 1
+    assert loaded.stages[0].state.job_id == "12345.pbs"
+    assert loaded.stages[0].state.status is StageStatus.SUBMITTED
+    assert loaded.stages[0].state.attempts == 1
 
 
 def test_submit_returns_job_id(created_run, mock_qsub):
@@ -160,7 +160,7 @@ def test_submit_skips_if_first_stage_not_pending(
     created_run, mock_qsub, non_pending_status
 ):
     """Test that ModelRun.submit() is a no-op if the first stage is not PENDING"""
-    created_run.stages[0].status.status = non_pending_status
+    object.__setattr__(created_run.stages[0].state, "_status", non_pending_status)
     created_run.submit()
     mock_qsub.assert_not_called()
 
@@ -183,8 +183,8 @@ def test_qsub_calls_subprocess_with_correct_args(created_run, mocker):
 
 def test_submit_returns_existing_job_id_when_skipping(created_run, mock_qsub):
     """Test that ModelRun.submit() returns the existing job ID when skipping"""
-    created_run.stages[0].status.status = StageStatus.SUBMITTED
-    created_run.stages[0].status.job_id = "existing.pbs"
+    created_run.stages[0].state.status = StageStatus.SUBMITTED
+    created_run.stages[0].state.job_id = "existing.pbs"
     assert created_run.submit() == "existing.pbs"
 
 
@@ -192,18 +192,18 @@ def test_submit_returns_empty_string_when_skipping_with_no_job_id(
     created_run, mock_qsub
 ):
     """Test that ModelRun.submit() returns empty string when skipping a stage with no job ID"""
-    created_run.stages[0].status.status = StageStatus.SUBMITTED
+    created_run.stages[0].state.status = StageStatus.SUBMITTED
     assert created_run.submit() == ""
 
 
 def test_submit_does_not_mutate_stage_when_skipping(created_run, mock_qsub):
     """Test that ModelRun.submit() does not change stage state when skipping"""
-    created_run.stages[0].status.status = StageStatus.DONE
-    created_run.stages[0].status.increment_attempts()
-    created_run.stages[0].status.increment_attempts()
-    created_run.stages[0].status.increment_attempts()
+    created_run.stages[0].state.status = StageStatus.SUBMITTED
+    created_run.stages[0].state.increment_attempts()
+    created_run.stages[0].state.increment_attempts()
+    created_run.stages[0].state.increment_attempts()
     created_run.submit()
-    assert created_run.stages[0].status.attempts == 3
+    assert created_run.stages[0].state.attempts == 3
 
 
 def test_submit_dry_run_does_not_call_qsub(created_run, mock_qsub):
@@ -216,7 +216,7 @@ def test_submit_dry_run_job_id_format(created_run, mock_qsub):
     """Test that submit(dry_run=True) produces a synthetic DRY_ job ID"""
     created_run.submit(dry_run=True)
     expected = f"DRY_{created_run.run_id}_{created_run.stages[0].config.name}"
-    assert created_run.stages[0].status.job_id == expected
+    assert created_run.stages[0].state.job_id == expected
 
 
 def test_submit_dry_run_still_writes_job_script(created_run, mock_qsub):
@@ -229,7 +229,7 @@ def test_submit_dry_run_still_writes_job_script(created_run, mock_qsub):
 def test_submit_dry_run_still_updates_stage_state(created_run, mock_qsub):
     """Test that submit(dry_run=True) still marks the stage as SUBMITTED"""
     created_run.submit(dry_run=True)
-    assert created_run.stages[0].status.status is StageStatus.SUBMITTED
+    assert created_run.stages[0].state.status is StageStatus.SUBMITTED
 
 
 def test_submit_qsub_failure_leaves_stage_pending(created_run, mocker):
@@ -239,7 +239,7 @@ def test_submit_qsub_failure_leaves_stage_pending(created_run, mocker):
     )
     with pytest.raises(subprocess.CalledProcessError):
         created_run.submit()
-    assert created_run.stages[0].status.status is StageStatus.PENDING
+    assert created_run.stages[0].state.status is StageStatus.PENDING
 
 
 def test_submit_qsub_failure_does_not_persist(created_run, mocker):
@@ -250,4 +250,4 @@ def test_submit_qsub_failure_does_not_persist(created_run, mocker):
     with pytest.raises(subprocess.CalledProcessError):
         created_run.submit()
     loaded = ModelRun.load(created_run.root)
-    assert loaded.stages[0].status.status is StageStatus.PENDING
+    assert loaded.stages[0].state.status is StageStatus.PENDING

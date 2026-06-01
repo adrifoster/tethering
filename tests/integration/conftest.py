@@ -21,7 +21,7 @@ def script_file(tmp_path) -> Path:
 
 
 @pytest.fixture
-def ad_config_dict(script_file) -> dict:
+def ad_stage_config_dict(script_file) -> dict:
     """Smallest valid flat dict for an StageConfig."""
     return {
         "name": "spinup_ad",
@@ -32,13 +32,13 @@ def ad_config_dict(script_file) -> dict:
     }
 
 @pytest.fixture
-def run_config_dict(tmp_path, ad_config_dict) -> dict:
+def run_config_dict(tmp_path, ad_stage_config_dict) -> dict:
     return {
         "root": str(tmp_path / "myrun"),
         "user": "name@ucar.edu",
         "run_id": "member_0001",
         "project": "PROJ123",
-        "stages": [ad_config_dict],
+        "stages": [ad_stage_config_dict],
     }
 
 @pytest.fixture
@@ -51,12 +51,12 @@ def mock_qsub(mocker):
     return mock
 
 @pytest.fixture
-def integration_run(tmp_path, ad_config_dict):
+def integration_run(tmp_path, ad_stage_config_dict):
     """A ModelRun with a real Derecho project code for integration tests."""
     return ModelRun.create({
         "root": str(tmp_path / "myrun"),
         "run_id": "member_0001",
         "project": "",
         "user": "",
-        "stages": [ad_config_dict],
+        "stages": [ad_stage_config_dict],
     })

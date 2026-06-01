@@ -4,6 +4,7 @@ Tests for tethering.stages:
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 import pytest
 
@@ -13,6 +14,7 @@ from tethering.stages import (
     StageKind,
     StageState,
     StageStatus,
+    _RUNTIME_KEYS,
 )
 
 # ---------------------------------------------------------------------------
@@ -96,6 +98,64 @@ def test_stage_kind_no_implicit_string_equality():
 # ---------------------------------------------------------------------------
 
 
+def test_stage_state_can_set_submit_time():
+    """Test StageState can set the submit time correctly"""
+    state = StageState()
+    state.submit_time = 1000000.0
+    assert state.submit_time == 1000000.0
+
+
+def test_stage_state_can_set_end_time():
+    """Test StageState can set the end time correctly"""
+    state = StageState()
+    state.submit_time = 1000000.0
+    state.end_time = 3000000.0
+    assert state.end_time == 3000000.0
+
+
+def test_stage_state_cannot_set_submit_time_after_end_time(failed_state):
+    """Test StageState cannot set submit time after end_time"""
+    with pytest.raises(ValueError, match="end_time"):
+        failed_state.submit_time = 5_000_000.0
+
+
+def test_stage_state_cannot_set_end_time_before_submit_time(submitted_state):
+    """Test StageState cannot set end_time before submit_time"""
+    state = StageState(submit_time=1_000_000.0)
+    with pytest.raises(ValueError, match="cannot precede"):
+        state.end_time = 500_000.0
+
+
+def test_stage_state_increment_attempts():
+    """Test StageState.increment_attempts"""
+    state = StageState()
+    state.increment_attempts()
+    assert state.attempts == 1
+    state.increment_attempts()
+    assert state.attempts == 2
+
+
+def test_stage_state_status_setter():
+    """Test StageState status setter"""
+    state = StageState()
+    state.status = StageStatus.SUBMITTED
+    assert state.status is StageStatus.SUBMITTED
+
+
+def test_stage_state_status_setter_with_string_failes():
+    """Test StageState status setter"""
+    state = StageState()
+    with pytest.raises(TypeError, match="status"):
+        state.status = "done"
+
+
+def test_stage_state_cannot_set_end_time_without_submit_time():
+    """Test StageState cannot set end_time without submit_time"""
+    state = StageState()
+    with pytest.raises(ValueError, match="submit_time"):
+        state.end_time = 1_000_000.0
+
+
 def test_stage_state_default_construction():
     """Test that a default StageState is constructed correctly"""
     stage_state = StageState()
@@ -130,16 +190,16 @@ def test_stage_state_equal_submit_and_end_time_is_valid():
     assert stage_state.end_time == stage_state.submit_time
 
 
-def test_stage_state_to_dict_all_fields_present(submitted_state):
+def test_stage_state_to_dict_all_fields_present(failed_state):
     """Test that a StageState dict is creating correctly"""
-    stage_dict = submitted_state.to_dict()
+    stage_dict = failed_state.to_dict()
     assert isinstance(stage_dict["status"], str)
-    assert stage_dict["status"] == "submitted"
+    assert stage_dict["status"] == "failed"
     assert stage_dict["job_id"] == "12345.pbs"
     assert stage_dict["case_root"] == "/scratch/cases/spinup_ad"
     assert stage_dict["attempts"] == 1
     assert stage_dict["submit_time"] == 1000000.0
-    assert stage_dict["end_time"] == 1003600.0
+    assert stage_dict["end_time"] == 3000000.0
 
 
 def test_stage_state_from_dict_roundtrip(submitted_state):
@@ -174,49 +234,88 @@ def test_stage_state_from_dict_does_not_mutate_input():
     assert original == copy
 
 
+def test_stage_state_equality(submitted_state):
+    """Test that two identical StageStates are equal"""
+    other = StageState.from_dict(submitted_state.to_dict())
+    assert submitted_state == other
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("_status", StageStatus.DONE),
+        ("job_id", "99999.pbs"),  # no underscore
+        ("case_root", "/scratch/cases/other"),  # no underscore
+        ("_submit_time", 2_000_000.0),
+        ("_end_time", 2_003_600.0),
+        ("_attempts", 5),
+    ],
+)
+def test_stage_state_inequality_on_each_field(submitted_state, field, value):
+    """Test that changing any individual field makes StageStates unequal"""
+    other = StageState.from_dict(submitted_state.to_dict())
+    object.__setattr__(other, field, value)
+    assert submitted_state != other
+
+
+def test_runtime_keys_match_stage_state_init():
+    """Ensure _RUNTIME_KEYS stays in sync with StageState.__init__"""
+    actual = frozenset(
+        p for p in inspect.signature(StageState.__init__).parameters if p != "self"
+    )
+    assert _RUNTIME_KEYS == actual, (
+        f"_RUNTIME_KEYS is out of sync with StageState.__init__. "
+        f"Missing: {actual - _RUNTIME_KEYS}, Extra: {_RUNTIME_KEYS - actual}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # StageConfig
 # ---------------------------------------------------------------------------
 
 
-def test_stage_config_valid_minimal(minimal_config):
-    """Test that StageSonfig can be constructed with a minimal dict"""
-    assert minimal_config.name == "spinup_ad"
-    assert minimal_config.kind is StageKind.CUSTOM
+def test_stage_config_valid_minimal(minimal_stage_config):
+    """Test that StageConfig can be constructed with a minimal dict"""
+    assert minimal_stage_config.name == "spinup_ad"
+    assert minimal_stage_config.kind is StageKind.CUSTOM
 
 
-def test_stage_config_empty_name_raises(minimal_config_dict):
+def test_stage_config_empty_name_raises(minimal_stage_config_dict):
     """Test that StageConfig with a dict with an empty name raises a ValueError"""
-    config = {**minimal_config_dict, "name": ""}
+    config = {**minimal_stage_config_dict, "name": ""}
     with pytest.raises(ValueError, match="name"):
         StageConfig.from_dict(config)
 
 
-def test_stage_config_empty_script_raises(minimal_config_dict):
+def test_stage_config_empty_script_raises(minimal_stage_config_dict):
     """Test that StageConfig initiated with a dict with an empty script raises a ValueError"""
-    config = {**minimal_config_dict, "script": ""}
+    config = {**minimal_stage_config_dict, "script": ""}
     with pytest.raises(ValueError, match="script"):
         StageConfig.from_dict(config)
 
 
-def test_stage_config_bad_script_raises(minimal_config_dict):
+def test_stage_config_bad_script_raises_on_validate(minimal_stage_config_dict):
     """Test that StageConfig initiated with a dict with an nonexistant script raises a ValueError"""
-    config = {**minimal_config_dict, "script": Path("doesnt_exist.sh")}
+    config = {**minimal_stage_config_dict, "script": Path("doesnt_exist.sh")}
+    stage = StageConfig.from_dict(config)
     with pytest.raises(ValueError, match="script"):
-        StageConfig.from_dict(config)
+        stage.validate()
 
 
-def test_stage_config_converts_string_to_path(minimal_config_dict):
+def test_stage_config_converts_string_to_path(minimal_stage_config_dict):
     """Test that a string path is automatically converted to a Path object."""
-    config = {**minimal_config_dict, "script": str(minimal_config_dict["script"])}
+    config = {
+        **minimal_stage_config_dict,
+        "script": str(minimal_stage_config_dict["script"]),
+    }
     stage_config = StageConfig.from_dict(config)
     assert isinstance(stage_config.script, Path)
     assert stage_config.script.exists()
 
 
-def test_stage_config_empty_queue_raises(minimal_config_dict):
+def test_stage_config_empty_queue_raises(minimal_stage_config_dict):
     """Test that StageConfig initiated with an empty queue raises a ValueError"""
-    config = {**minimal_config_dict, "queue": ""}
+    config = {**minimal_stage_config_dict, "queue": ""}
     with pytest.raises(ValueError, match="queue"):
         StageConfig.from_dict(config)
 
@@ -224,17 +323,19 @@ def test_stage_config_empty_queue_raises(minimal_config_dict):
 @pytest.mark.parametrize(
     "bad_walltime",
     [
-        "6:00:00",  # single-digit hours
-        "06:0:00",  # single-digit minutes
-        "06:00:0",  # single-digit seconds
         "06-00-00",  # wrong separator
-        "06:00",  # missing seconds
-        "",
+        "06:99:00",  # minutes out of range
+        "06:00:99",  # seconds out of range
+        "1:2:3:4:5",  # too many components
+        "00:00:00",  # zero walltime
+        "0:0:0",  # zero walltime, no padding
+        "0",  # zero walltime, single component
+        "",  # empty
     ],
 )
-def test_stage_config_invalid_walltime_raises(minimal_config_dict, bad_walltime):
+def test_stage_config_invalid_walltime_raises(minimal_stage_config_dict, bad_walltime):
     """Test that StageConfig initialized with a bad walltime raises a ValueError"""
-    config = {**minimal_config_dict, "walltime": bad_walltime}
+    config = {**minimal_stage_config_dict, "walltime": bad_walltime}
     with pytest.raises(ValueError, match="walltime"):
         StageConfig.from_dict(config)
 
@@ -247,111 +348,111 @@ def test_stage_config_invalid_walltime_raises(minimal_config_dict, bad_walltime)
         "120:00:00",
     ],
 )
-def test_stage_config_valid_walltime(minimal_config_dict, good_walltime):
+def test_stage_config_valid_walltime(minimal_stage_config_dict, good_walltime):
     """Test that StageConfig initialized with a good walltime values works"""
-    config = {**minimal_config_dict, "walltime": good_walltime}
+    config = {**minimal_stage_config_dict, "walltime": good_walltime}
     stage_config = StageConfig.from_dict(config)
     assert stage_config.walltime == good_walltime
 
 
 @pytest.mark.parametrize("bad_memory", ["1", "GB", "1 GB", "16gb x", ""])
-def test_stage_config_invalid_memory_raises(minimal_config_dict, bad_memory):
+def test_stage_config_invalid_memory_raises(minimal_stage_config_dict, bad_memory):
     """Test that StageConfig initialized with bad memory values raises a ValueError"""
-    config = {**minimal_config_dict, "memory": bad_memory}
+    config = {**minimal_stage_config_dict, "memory": bad_memory}
     with pytest.raises(ValueError, match="memory"):
         StageConfig.from_dict(config)
 
 
 @pytest.mark.parametrize("good_memory", ["1B", "512MB", "16GB", "1TB", "1.5GB"])
-def test_stage_config_valid_memory(minimal_config_dict, good_memory):
+def test_stage_config_valid_memory(minimal_stage_config_dict, good_memory):
     """Test that StageConfig initialized with a good memory values works"""
-    config = {**minimal_config_dict, "memory": good_memory}
+    config = {**minimal_stage_config_dict, "memory": good_memory}
     stage_config = StageConfig.from_dict(config)
     assert stage_config.memory == good_memory
 
 
-def test_stage_config_ncpus_zero_raises(minimal_config_dict):
+def test_stage_config_ncpus_zero_raises(minimal_stage_config_dict):
     """Test that StageConfig initialized with 0 ncpus raises a ValueError"""
-    config = {**minimal_config_dict, "ncpus": 0}
+    config = {**minimal_stage_config_dict, "ncpus": 0}
     with pytest.raises(ValueError, match="ncpus"):
         StageConfig.from_dict(config)
 
 
-def test_stage_config_select_zero_raises(minimal_config_dict):
+def test_stage_config_select_zero_raises(minimal_stage_config_dict):
     """Test that StageConfig initialized with select: 0 raises a ValueError"""
-    config = {**minimal_config_dict, "select": 0}
+    config = {**minimal_stage_config_dict, "select": 0}
     with pytest.raises(ValueError, match="select"):
         StageConfig.from_dict(config)
 
 
-def test_stage_config_invalid_kind_raises(minimal_config_dict):
+def test_stage_config_invalid_kind_raises(minimal_stage_config_dict):
     """Test that StageConfig initialized with a bad StageKind raises a ValueError"""
-    config = {**minimal_config_dict, "kind": "nonsense"}
+    config = {**minimal_stage_config_dict, "kind": "nonsense"}
     with pytest.raises(ValueError, match="Invalid StageKind"):
         StageConfig.from_dict(config)
 
 
-def test_stage_config_is_frozen(minimal_config):
+def test_stage_config_is_frozen(minimal_stage_config):
     """Test that StageConfig is actually immutable"""
     with pytest.raises(Exception):
-        minimal_config.name = "mutated"
+        minimal_stage_config.name = "mutated"
 
 
-def test_stage_config_extra_pbs_stored_as_tuple(full_config):
+def test_stage_config_extra_pbs_stored_as_tuple(full_stage_config):
     """Test that StageConfig's extra_pbs attribute is stored as a tuple"""
-    assert isinstance(full_config.extra_pbs, tuple)
+    assert isinstance(full_stage_config.extra_pbs, tuple)
 
 
-def test_stage_config_to_dict_kind_is_string(full_config):
+def test_stage_config_to_dict_kind_is_string(full_stage_config):
     """Test that StageConfig's to_dict correctly sets the kind as a string"""
-    assert full_config.to_dict()["kind"] == "ad"
+    assert full_stage_config.to_dict()["kind"] == "ad"
 
 
-def test_stage_config_to_dict_extra_pbs_is_list(full_config):
+def test_stage_config_to_dict_extra_pbs_is_list(full_stage_config):
     """Test that StageConfig's to_dict extra_bs is set as a list"""
-    assert isinstance(full_config.to_dict()["extra_pbs"], list)
+    assert isinstance(full_stage_config.to_dict()["extra_pbs"], list)
 
 
-def test_stage_config_roundtrip_minimal(minimal_config):
+def test_stage_config_roundtrip_minimal(minimal_stage_config):
     """Test that StageConfig can be "round tripped" to a dict and back with a minimal config"""
-    assert StageConfig.from_dict(minimal_config.to_dict()) == minimal_config
+    assert StageConfig.from_dict(minimal_stage_config.to_dict()) == minimal_stage_config
 
 
-def test_stage_config_roundtrip_full(full_config):
+def test_stage_config_roundtrip_full(full_stage_config):
     """Test that StageConfig can be "round tripped" to a dict and back with a full config"""
-    assert StageConfig.from_dict(full_config.to_dict()) == full_config
+    assert StageConfig.from_dict(full_stage_config.to_dict()) == full_stage_config
 
 
-def test_stage_config_from_dict_defaults_kind_to_custom(minimal_config_dict):
+def test_stage_config_from_dict_defaults_kind_to_custom(minimal_stage_config_dict):
     """Test that StageConfig initiated without a kind defaults to CUSTOM"""
     # kind absent from dict should default to "custom"
-    stage_config = StageConfig.from_dict(minimal_config_dict)
+    stage_config = StageConfig.from_dict(minimal_stage_config_dict)
     assert stage_config.kind is StageKind.CUSTOM
 
 
-def test_stage_config_from_dict_defaults_memory_to_10gb(minimal_config_dict):
+def test_stage_config_from_dict_defaults_memory_to_10gb(minimal_stage_config_dict):
     """Test that StageConfig initiated without memory defaults to 10GB"""
-    stage_config = StageConfig.from_dict(minimal_config_dict)
+    stage_config = StageConfig.from_dict(minimal_stage_config_dict)
     assert stage_config.memory == "10GB"
 
 
-def test_stage_config_from_dict_defaults_no_cime_to_false(minimal_config_dict):
+def test_stage_config_from_dict_defaults_no_cime_to_false(minimal_stage_config_dict):
     """Test that StageConfig initiated without no_cime defaults to False"""
-    stage_config = StageConfig.from_dict(minimal_config_dict)
-    assert stage_config.no_cime == False
+    stage_config = StageConfig.from_dict(minimal_stage_config_dict)
+    assert stage_config.no_cime is False
 
 
-def test_stage_config_from_dict_no_cime_read(no_cime_config_dict):
+def test_stage_config_from_dict_no_cime_read(no_cime_stage_config_dict):
     """Test that StageConfig gets no_cime correctly"""
-    stage_config = StageConfig.from_dict(no_cime_config_dict)
-    assert stage_config.no_cime == True
+    stage_config = StageConfig.from_dict(no_cime_stage_config_dict)
+    assert stage_config.no_cime is True
 
 
-def test_stage_config_from_dict_does_not_mutate_input(minimal_config_dict):
+def test_stage_config_from_dict_does_not_mutate_input(full_stage_config_dict):
     """Test that initializing StageConfig doesn't mutate the input"""
-    copy = dict(minimal_config_dict)
-    StageConfig.from_dict(minimal_config_dict)
-    assert minimal_config_dict == copy
+    copy = dict(full_stage_config_dict)
+    StageConfig.from_dict(full_stage_config_dict)
+    assert full_stage_config_dict == copy
 
 
 # ---------------------------------------------------------------------------
@@ -359,17 +460,32 @@ def test_stage_config_from_dict_does_not_mutate_input(minimal_config_dict):
 # ---------------------------------------------------------------------------
 
 
-def test_stage_default_status_is_pending(minimal_config):
+def test_stage_equality(minimal_stage_config):
+    """Test Stage__eq__ with equal stages"""
+    s1 = Stage(config=minimal_stage_config)
+    s2 = Stage(config=minimal_stage_config)
+    assert s1 == s2
+
+
+def test_stage_inequality_on_state(minimal_stage_config):
+    """Test Stage__eq__ with inequalities"""
+    s1 = Stage(config=minimal_stage_config)
+    s2 = Stage(config=minimal_stage_config)
+    s2.state.increment_attempts()
+    assert s1 != s2
+
+
+def test_stage_default_status_is_pending(minimal_stage_config):
     """Test that initializing Stage without a status sets to PENDING"""
-    stage = Stage(config=minimal_config)
-    assert stage.status.status is StageStatus.PENDING
+    stage = Stage(config=minimal_stage_config)
+    assert stage.state.status is StageStatus.PENDING
 
 
 def test_stage_status_reset(full_stage):
     """Assert that we can reset the status"""
-    full_stage.status = StageState()
-    assert full_stage.status.status is StageStatus.PENDING
-    assert full_stage.status.attempts == 0
+    full_stage.state = StageState()
+    assert full_stage.state.status is StageStatus.PENDING
+    assert full_stage.state.attempts == 0
 
 
 def test_stage_to_dict_is_flat(full_stage):
@@ -387,16 +503,16 @@ def test_stage_roundtrip_with_runtime_state(full_stage):
     assert Stage.from_dict(full_stage.to_dict()) == full_stage
 
 
-def test_stage_roundtrip_default_state(minimal_config):
+def test_stage_roundtrip_default_state(minimal_stage_config):
     """Test that Stage can be 'roundtripped' to a dict and back with a minimal config"""
-    stage = Stage(config=minimal_config)
+    stage = Stage(config=minimal_stage_config)
     assert Stage.from_dict(stage.to_dict()) == stage
 
 
-def test_stage_from_dict_missing_status_defaults_to_pending(minimal_config_dict):
+def test_stage_from_dict_missing_status_defaults_to_pending(minimal_stage_config_dict):
     """Test that if runtime keys are absent entirely, state defaults to PENDING."""
-    stage = Stage.from_dict(minimal_config_dict)
-    assert stage.status.status is StageStatus.PENDING
+    stage = Stage.from_dict(minimal_stage_config_dict)
+    assert stage.state.status is StageStatus.PENDING
 
 
 def test_stage_from_dict_does_not_mutate_input(full_stage):
@@ -411,3 +527,26 @@ def test_stage_config_is_frozen_through_stage(full_stage):
     """Test that StageConfig is immutable when owned by Stage"""
     with pytest.raises(Exception):
         full_stage.config.name = "mutated"
+
+
+@pytest.mark.parametrize(
+    "partial_state",
+    [
+        {"status": "submitted"},
+        {"status": "submitted", "job_id": "12345.pbs"},
+        {"status": "submitted", "job_id": "12345.pbs", "attempts": 2},
+        {"status": "submitted", "submit_time": 1_000_000.0},
+    ],
+)
+def test_stage_from_dict_partial_state(minimal_stage_config_dict, partial_state):
+    """Test that Stage.from_dict correctly handles partial runtime state,
+    as might occur when recovering from a checkpoint written mid-run.
+    """
+    stage_dict = {**minimal_stage_config_dict, **partial_state}
+    stage = Stage.from_dict(stage_dict)
+
+    assert stage.state.status == StageStatus.from_str(partial_state["status"])
+    assert stage.state.job_id == partial_state.get("job_id")
+    assert stage.state.attempts == partial_state.get("attempts", 0)
+    assert stage.state.submit_time == partial_state.get("submit_time")
+    assert stage.state.end_time is None

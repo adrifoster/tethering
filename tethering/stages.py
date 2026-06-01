@@ -5,18 +5,25 @@ StageStatus and StageKind Enums, plus StageState, StageConfig, and Stage
 
 from __future__ import annotations
 
+import inspect
 import re
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
-_WALLTIME_RE = re.compile(r"^\d{2,3}:\d{2}:\d{2}$")
+_WALLTIME_RE = re.compile(r"^\d+(?::\d+)*$")
 _MEMORY_RE = re.compile(r"^\d+(\.\d+)?(B|KB|MB|GB|TB)$", re.IGNORECASE)
-_RUNTIME_KEYS = frozenset(
-    {"status", "job_id", "case_root", "submit_time", "end_time", "attempts"}
-)
 
+# keys that belong to StageState in a flat Stage dict.
+# must be kept in sync with StageState.__init__ parameters.
+_RUNTIME_KEYS: frozenset[str] = frozenset({
+    "status",
+    "job_id", 
+    "case_root",
+    "submit_time",
+    "end_time",
+    "attempts",
+})
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -61,8 +68,21 @@ class StageStatus(Enum):
             ) from e
 
 
+_ALLOWED_TRANSITIONS: dict[StageStatus, frozenset[StageStatus]] = {
+    StageStatus.PENDING: frozenset({StageStatus.SUBMITTED, StageStatus.FAILED, StageStatus.PENDING}),
+    StageStatus.SUBMITTED: frozenset({StageStatus.DONE, StageStatus.FAILED}),
+    StageStatus.DONE: frozenset({StageStatus.PENDING, StageStatus.FAILED}),
+    StageStatus.FAILED: frozenset({StageStatus.PENDING}),
+}
+
+
 class StageKind(Enum):
-    """Stage Kind Enum"""
+    """Stage Kind enum
+    
+    Currently informational only; used for logging and checkpointing.
+    Intended to drive stage-specific behavior (walltime defaults, spinup
+    checks, post-processing) as the tethering system matures.
+    """
 
     AD = "ad"
     SASU = "sasu"
@@ -92,7 +112,7 @@ class StageKind(Enum):
             StageKind: StageKind instance
         """
         try:
-            return cls(raw.lower().strip())
+            return cls(raw.lower().strip().replace("_", "-"))
         except ValueError as e:
             raise ValueError(
                 f"Invalid StageKind {raw!r}. " f"Valid values: {[e.value for e in cls]}"
@@ -107,20 +127,33 @@ class StageKind(Enum):
 class StageState:
     """Mutable runtime state for one stage. Owned by `Stage`.
 
-    All mutation goes through methods or properties that enforce invariants:
+    Mutations for submit_time, end_time, attempts, and status gi through methods or properties
+    that enforce invariants:
     - submit_time cannot be set after end_time is set
     - end_time requires submit_time to be set first
     - end_time cannot precede submit_time
     - attempts is incremented via increment_attempts(), never set directly
+    - status must always be a class StageStatus instance
+
+    Note:
+    A StageState is intended to be owned by a single class Stage instance.
+    Do not share the same StageState object between multiple Stage objects.
+    Use Stage.status = StageState(...) to replace it.
 
     Attributes
     -----------
-    status: current status of the stage
-    job_id: PBS job ID assigned after submission
-    case_root: absolute path to the CESM case directory
-    _submit_time: unix timestamp of the most recent submission
-    _end_time: unix timestamp of completion or failure
-    _attempts: how many times this stage has been submitted (must be >=0)
+    status: StageStatus
+        Current status of the stage
+    job_id: str or None
+        PBS job ID assigned after submission
+    case_root: str or None
+        Absolute path to the CESM case directory
+    submit_time: float or None
+        Unix timestamp of the most recent submission
+    end_time: float or None
+        Unix timestamp of completion or failure
+    attempts: int
+        How many times this stage has been submitted (must be >=0)
     """
 
     def __init__(
@@ -132,7 +165,7 @@ class StageState:
         end_time: float | None = None,
         attempts: int = 0,
     ):
-        self.status = status
+        self._status = status
         self.job_id = job_id
         self.case_root = case_root
         self._submit_time = submit_time
@@ -141,6 +174,10 @@ class StageState:
         self._validate()
 
     def _validate(self):
+        if not isinstance(self._status, StageStatus):
+            raise TypeError(
+                f"status must be a StageStatus instance, got {type(self._status).__name__!r}"
+            )
         if self._attempts < 0:
             raise ValueError(f"attempts must be >=0, got {self._attempts!r}")
         if self._end_time is not None:
@@ -154,6 +191,26 @@ class StageState:
                     f"end_time ({self._end_time}) cannot precede "
                     f"submit_time ({self._submit_time})."
                 )
+
+    @property
+    def status(self) -> StageStatus:
+        """Get the current StageStatus"""
+        return self._status
+
+    @status.setter
+    def status(self, value: StageStatus):
+        if not isinstance(value, StageStatus):
+            raise TypeError(
+                f"status must be a StageStatus instance, got {type(value).__name__!r}"
+            )
+        allowed = _ALLOWED_TRANSITIONS[self._status]
+        if value not in allowed:
+            raise ValueError(
+                f"Invalid status transition: {self._status} to {value}. "
+                f"Allowed: {allowed}"
+            )
+        self._status = value
+        self._validate()
 
     @property
     def submit_time(self) -> float | None:
@@ -171,12 +228,8 @@ class StageState:
         Args:
             value (float): submit_time to set
         """
-        if self._end_time is not None:
-            raise ValueError(
-                f"end_time ({self._end_time}) is already set; "
-                "reset the end_time before setting submit_time."
-            )
         self._submit_time = value
+        self._validate()
 
     @property
     def end_time(self) -> float | None:
@@ -194,17 +247,8 @@ class StageState:
         Args:
             value (float): end_time to set
         """
-        if self._submit_time is None:
-            raise ValueError(
-                "cannot set end_time when submit_time is None "
-                "a stage cannot finish before it starts."
-            )
-        if value and value < self._submit_time:
-            raise ValueError(
-                f"end_time ({value}) cannot precede "
-                f"submit_time ({self._submit_time})."
-            )
         self._end_time = value
+        self._validate()
 
     @property
     def attempts(self) -> int:
@@ -323,16 +367,11 @@ class StageConfig:
         if not self.script:
             raise ValueError("script must not be empty.")
 
+        # __setattr__ is required because the dataclass is frozen
         object.__setattr__(self, "script", Path(self.script))
 
-        if not self.script.exists():
-            raise ValueError(f"cannot open script {self.script!r}.")
-
-        if not _WALLTIME_RE.match(self.walltime):
-            raise ValueError(
-                f"walltime {self.walltime!r} does not match expected format "
-                "HH:MM:SS (or HHH:MM:SS). Example: '06:00:00"
-            )
+        _validate_walltime(self.walltime)
+        
         if not self.queue:
             raise ValueError("queue must not be empty.")
         if self.ncpus < 1:
@@ -345,12 +384,24 @@ class StageConfig:
                 "<number><unit> where unit is one of B, KB, MB, GB, TB. "
                 "Example: '16GB'"
             )
+                
+    def validate(self):
+        """Validate that this config is ready for submission.
+        
+        Separated from __post_init__ so StageConfig can be constructed and 
+        deserialized without requiring filesystem access
+        
+        Raises:
+            ValueError: if the script path does not exist
+        """
+        if not self.script.exists():
+            raise ValueError(f"cannot open script {self.script!r}.")
 
     def to_dict(self) -> dict:
         """Serialize configuration fields to a plain dictionary"""
         return {
             "name": self.name,
-            "script": self.script,
+            "script": str(self.script),
             "walltime": self.walltime,
             "queue": self.queue,
             "kind": self.kind.to_str(),
@@ -391,11 +442,11 @@ class Stage:
     Attributes
     -----------
     config: StageConfig attributes
-    status: StageState instance; reset with stage.status = StageState()
+    state: StageState instance; reset with stage.status = StageState()
     """
 
     config: StageConfig
-    status: StageState = field(default_factory=StageState)
+    state: StageState = field(default_factory=StageState)
 
     @classmethod
     def from_dict(cls, input_dict: dict) -> Stage:
@@ -411,7 +462,7 @@ class Stage:
         runtime_dict = {k: in_dict.pop(k) for k in _RUNTIME_KEYS if k in in_dict}
         return cls(
             config=StageConfig.from_dict(in_dict),
-            status=StageState.from_dict(runtime_dict) if runtime_dict else StageState(),
+            state=StageState.from_dict(runtime_dict) if runtime_dict else StageState(),
         )
 
     def to_dict(self) -> dict:
@@ -420,4 +471,29 @@ class Stage:
         Returns:
             dict: output dictionary
         """
-        return {**self.config.to_dict(), **self.status.to_dict()}
+        return {**self.config.to_dict(), **self.state.to_dict()}
+
+def _validate_walltime(walltime: str):
+    """Validate walltime for a PBS submission
+
+    Args:
+        walltime (str): input string
+    """
+    if not _WALLTIME_RE.match(walltime):
+        raise ValueError(
+            f"walltime {walltime!r} must be a colon-separated time string, "
+            "e.g. '6:00:00' or '06:00:00' or '24:00:00'. "
+            "See PBS documentation for full format options."
+        )
+    parts = walltime.split(":")
+    if len(parts) > 4:
+        raise ValueError(
+            f"walltime {walltime!r} has too many components (max 4: DD:HH:MM:SS)."
+        )
+    # only validate mm:ss ranges when we can identify them
+    if len(parts) >= 2 and int(parts[-1]) > 59:
+        raise ValueError(f"walltime seconds must be 00-59, got {parts[-1]!r}.")
+    if len(parts) >= 3 and int(parts[-2]) > 59:
+        raise ValueError(f"walltime minutes must be 00-59, got {parts[-2]!r}.")
+    if all(int(part) == 0 for part in parts):
+            raise ValueError("walltime must be non-zero.")
