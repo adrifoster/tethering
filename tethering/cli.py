@@ -7,9 +7,10 @@ First-time setup: clm-run --create --config run.yaml
 All other commands (many called automatically by pipeline):
     clm-run --root /path/to/run --submit [--dry-run]
     clm-run --root /path/to/run --submit-advance --stage spinup_ad --cime-job-id 2003.desched1
+    clm-run --root /path/to/run --submit-fail --stage spinup_ad --cime-job-id 2003.desched1
     clm-run --root /path/to/run --advance --stage spinup_ad
     clm-run --root /path/to/run --fail --stage spinup_ad
-    clm-run --root /path/to/run --retry [--stage spinup_ad]
+    clm-run --root /path/to/run --retry [--stage spinup_ad] [--skip-script]
     clm-run --root /path/to/run --print-status
 """
 
@@ -45,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write and submit the advance job (use with --stage and --cime-job-id)",
     )
     actions.add_argument(
+        "--submit-fail",
+        action="store_true",
+        help="Write and submit the fail job (use with --stage and --cime-job-id)",
+    )
+    actions.add_argument(
         "--advance",
         action="store_true",
         help="Mark stage done and submit the next stage",
@@ -66,6 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--cime-job-id", help="CIME PBS job ID (required with --submit-advance)"
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--skip-script", action="store_true")
     parser.add_argument("--debug", action="store_true", help=argparse.SUPPRESS)
     return parser
 
@@ -94,12 +101,21 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
             parser.error("--stage is required with --submit-advance")
         if not args.cime_job_id:
             parser.error("--cime-job-id is required with --submit-advance")
+            
+    if args.submit_fail:
+        if not args.stage:
+            parser.error("--stage is required with --submit-fail")
+        if not args.cime_job_id:
+            parser.error("--cime-job-id is required with --submit-fail")
 
     if args.advance and not args.stage:
         parser.error("--stage is required with --advance")
 
     if args.fail and not args.stage:
         parser.error("--stage is required with --fail")
+        
+    if args.skip_script and not args.retry:
+        parser.error("--skip-script only to be used with --retry")
 
 
 def dispatch(args: argparse.Namespace) -> int:
@@ -132,6 +148,11 @@ def dispatch(args: argparse.Namespace) -> int:
         job_id = run.submit_advance(args.stage, args.cime_job_id, dry_run=args.dry_run)
         if job_id:
             print(f"Advance job submitted: {job_id}")
+            
+    elif args.submit_fail:
+        job_id = run.submit_fail(args.stage, args.cime_job_id, dry_run=args.dry_run)
+        if job_id:
+            print(f"Fail job submitted: {job_id}")
 
     elif args.advance:
         job_id = run.advance(args.stage, dry_run=args.dry_run)
@@ -142,7 +163,7 @@ def dispatch(args: argparse.Namespace) -> int:
         run.fail(args.stage)
 
     elif args.retry:
-        job_id = run.retry(args.stage, dry_run=args.dry_run)
+        job_id = run.retry(args.stage, dry_run=args.dry_run, skip_script=args.skip_script)
         if job_id:
             print(f"Resubmitted: {job_id}")
             

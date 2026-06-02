@@ -9,12 +9,20 @@ import json
 from pathlib import Path
 import re
 
+from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 import yaml
 
 from .stages import Stage, StageStatus
 
 # templates dir
 _TEMPLATES = Path(__file__).parents[1] / "templates"
+
+_ENV = Environment(
+    loader=FileSystemLoader(_TEMPLATES),
+    keep_trailing_newline=True,
+    trim_blocks=True,
+    lstrip_blocks=True,
+)
 
 # state file name
 _STATE_FILE = "run_state.json"
@@ -66,9 +74,13 @@ class ModelRun:
                 "Only letters, digits, hyphens, and underscores are allowed."
             )
         if not self.user:
-            raise ValueError("user must not be empty and $USER environment variable not set.")
+            raise ValueError(
+                "user must not be empty and $USER environment variable not set."
+            )
         if not self.project:
-            raise ValueError("project must not be empty and $PROJECT environment variable not set.")
+            raise ValueError(
+                "project must not be empty and $PROJECT environment variable not set."
+            )
         if not self.stages:
             raise ValueError("stages must not be empty")
 
@@ -160,7 +172,7 @@ class ModelRun:
         tmp = self.root / f"{_STATE_FILE}.tmp"
         tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
         tmp.rename(self.root / _STATE_FILE)
-        
+
     @property
     def stage_names(self) -> list[str]:
         """Get list of stage names"""
@@ -215,7 +227,7 @@ class ModelRun:
                 f"No stage named {after!r}. " f"Known stages: {self.stage_names}"
             ) from exc
         return self.stages[idx + 1] if idx + 1 < len(self.stages) else None
-    
+
     def _previous_stage(self, before: str) -> Stage | None:
         """Get the previous stage given an input name
 
@@ -261,9 +273,7 @@ class ModelRun:
             job = f" [{stage.state.job_id}]" if stage.state.job_id else ""
             # only show attempts if the stage has been retried at least once
             attempts = (
-                f" attempts={stage.state.attempts}"
-                if stage.state.attempts > 1
-                else ""
+                f" attempts={stage.state.attempts}" if stage.state.attempts > 1 else ""
             )
             lines.append(
                 f" {icon} {stage.config.name:<20}  {stage.state.status.value:<10}{job}{attempts}"
@@ -331,6 +341,34 @@ class ModelRun:
             f"  {self.run_id} / {stage_name}: advance job submitted {job_id} (afterok:{cime_job_id})"
         )
         return job_id
+    
+    def submit_fail(
+        self, stage_name: str, cime_job_id: str, dry_run: bool = False
+    ) -> str:
+        """Write the fail script with the CIME job ID and submit it
+        This is so that if our CIME job crashes we can fail the stage
+        Called from the setup job script after case.submit completes
+
+        Args:
+            stage_name (str): name of stage
+            cime_job_id (str): CIME job ID
+            dry_run (bool, optional): If True, only print text to screen and don't
+            submit anything. Defaults to False.
+
+        Returns:
+            str: PBS job ID of the fail script
+        """
+        stage = self._stage(stage_name)
+        job_file = self._write_fail_script(stage, cime_job_id)
+        job_id = (
+            f"DRY_fail_{self.run_id}_{stage_name}"
+            if dry_run
+            else self._qsub(job_file)
+        )
+        print(
+            f"  {self.run_id} / {stage_name}: fail job submitted {job_id} (afternotok:{cime_job_id})"
+        )
+        return job_id
 
     def advance(self, completed_stage_name: str, dry_run: bool = False) -> str | None:
         """Advance the pipeline and submit the next stage
@@ -360,13 +398,16 @@ class ModelRun:
             return None
         return self._submit_stage(next_stage, dry_run=dry_run)
 
-    def retry(self, stage_name: str | None, dry_run: bool = False) -> str | None:
+    def retry(
+        self, stage_name: str | None, dry_run: bool = False, skip_script: bool = False
+    ) -> str | None:
         """Reset a failed or stuck stage and resubmit it.
 
         Args:
             stage_name (str | None): stage name
             dry_run (bool, optional): If True, only print text to screen and don't
             submit anything. Defaults to False.
+            skip_script (bool, optional): If True, just submit and don't run the script. Defaults to False
 
         Returns:
             str | None: PBS job ID of the advance script, or None if all stages complete
@@ -385,12 +426,31 @@ class ModelRun:
         stage.state.submit_time = None
         stage.state.job_id = None
         self.save()
-        return self._submit_stage(stage, dry_run=dry_run)
+        return self._submit_stage(stage, dry_run=dry_run, skip_script=skip_script)
 
     def _submit_stage(
-        self, stage: Stage, depend_job_id: str | None = None, dry_run: bool = False
+        self,
+        stage: Stage,
+        depend_job_id: str | None = None,
+        dry_run: bool = False,
+        skip_script: bool = False,
     ) -> str:
-        
+        """Actually submit a stage
+
+        Args:
+            stage (Stage): stage
+            depend_job_id (str | None, optional): CIME job id to add to afterok dependency. Defaults to None.
+            dry_run (bool, optional): If True, only print text to screen and don't
+            submit anything. Defaults to False.
+            skip_script (bool, optional): If True, just submit and don't run the script. Defaults to False
+
+        Raises:
+            ValueError: Can only submit PENDING or FAILED stages
+
+        Returns:
+            str: _description_
+        """
+
         # validation and submission
         stage.config.validate()
         if stage.state.status not in (StageStatus.PENDING, StageStatus.FAILED):
@@ -398,13 +458,13 @@ class ModelRun:
                 f"Stage {stage.config.name!r} is {stage.state.status.value} "
                 "- can only submit PENDING or FAILED stages."
             )
-        job_file = self._write_job_script(stage, depend_job_id)
+        job_file = self._write_job_script(stage, depend_job_id, skip_script)
         job_id = (
             f"DRY_{self.run_id}_{stage.config.name}"
             if dry_run
             else self._qsub(job_file)
         )
-        
+
         # record successful submission
         stage.state.job_id = job_id
         stage.state.status = StageStatus.SUBMITTED
@@ -414,7 +474,9 @@ class ModelRun:
         print(f"{self.run_id} / {stage.config.name}: submitted {job_id}")
         return job_id
 
-    def _write_job_script(self, stage: Stage, depend_job_id: str | None = None) -> Path:
+    def _write_job_script(
+        self, stage: Stage, depend_job_id: str | None = None, skip_script: bool = False
+    ) -> Path:
         """Write the setup job script for one stage.
 
         The script:
@@ -426,6 +488,7 @@ class ModelRun:
         Args:
             stage (Stage): input Stage
             depend_job_id (str | None, optional): Depend Job ID. Defaults to None.
+            skip_script (bool, optional): If True, skips the script and just submits
 
         Returns:
             Path: path to job script
@@ -433,23 +496,15 @@ class ModelRun:
         case_root = self._case_root_for(stage)
         previous_stage = self._previous_stage(stage.config.name)
         previous_stage_name = previous_stage.config.name if previous_stage else ""
-        
+
         job_name = f"{self.run_id}_{stage.config.name}"
         job_file = self.root / f"{job_name}.pbs"
-        depend_line = (
-            f"#PBS -W depend=afterok:{depend_job_id}\n" if depend_job_id else ""
-        )
         extra = "\n".join(f"#PBS {d}" for d in stage.config.extra_pbs)
 
         log_file = self.root / f"{job_name}.log"
 
-        template_name = (
-            "no_cime_script_template.txt"
-            if stage.config.no_cime
-            else "submit_script_template.txt"
-        )
-        template = _load_template(_TEMPLATES / template_name)
-        template = template.format(
+        template = _ENV.get_template("submit_script_template.txt")
+        template = template.render(
             job_name=job_name,
             queue=stage.config.queue,
             select=stage.config.select,
@@ -459,7 +514,7 @@ class ModelRun:
             project=self.project,
             log_file=log_file,
             user=self.user,
-            depend_line=depend_line,
+            depend_job_id=depend_job_id,
             extra=extra,
             root=self.root,
             name=stage.config.name,
@@ -467,6 +522,8 @@ class ModelRun:
             run_id=self.run_id,
             script=stage.config.script,
             case_root=case_root,
+            cime=not stage.config.no_cime,
+            skip_script=skip_script,
         )
         job_file.write_text(template, encoding="utf-8")
         return job_file
@@ -485,8 +542,35 @@ class ModelRun:
         job_name = f"{self.run_id}_{stage.config.name}_advance"
         job_file = self.root / f"{job_name}.pbs"
 
-        template = _load_template(_TEMPLATES / "advance_script_template.txt")
-        template = template.format(
+        template = _ENV.get_template("advance_script_template.txt")
+        template = template.render(
+            job_name=job_name,
+            queue=stage.config.queue,
+            project=self.project,
+            user=self.user,
+            cime_job_id=cime_job_id,
+            root=self.root,
+            stage_name=stage.config.name,
+        )
+        job_file.write_text(template, encoding="utf-8")
+        return job_file
+
+    def _write_fail_script(self, stage: Stage, cime_job_id: str) -> Path:
+        """Write the fail job script with the real CIME job ID already in
+        the afternotok dependency line
+
+        Args:
+            stage (Stage): Stage to advance
+            cime_job_id (str): CIME job ID
+
+        Returns:
+            Path: path to script
+        """
+        job_name = f"{self.run_id}_{stage.config.name}_fail"
+        job_file = self.root / f"{job_name}.pbs"
+
+        template = _ENV.get_template("fail_script_template.txt")
+        template = template.render(
             job_name=job_name,
             queue=stage.config.queue,
             project=self.project,
@@ -560,20 +644,3 @@ def _load_config(config: Path | str | dict) -> dict:
     raise TypeError(
         f"config must be a dict, str, or Path, got {type(config).__name__!r}."
     )
-
-
-def _load_template(template_path: Path) -> str:
-    """Load a template file
-
-    Args:
-        template_path (str): path to template
-
-    Raises:
-        FileNotFoundError: Template file not found
-
-    Returns:
-        str: template string
-    """
-    if not template_path.exists():
-        raise FileNotFoundError(f"Template '{template_path}' not found.")
-    return template_path.read_text(encoding="utf-8")
