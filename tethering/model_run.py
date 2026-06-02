@@ -341,7 +341,7 @@ class ModelRun:
             f"  {self.run_id} / {stage_name}: advance job submitted {job_id} (afterok:{cime_job_id})"
         )
         return job_id
-    
+
     def submit_fail(
         self, stage_name: str, cime_job_id: str, dry_run: bool = False
     ) -> str:
@@ -361,9 +361,7 @@ class ModelRun:
         stage = self._stage(stage_name)
         job_file = self._write_fail_script(stage, cime_job_id)
         job_id = (
-            f"DRY_fail_{self.run_id}_{stage_name}"
-            if dry_run
-            else self._qsub(job_file)
+            f"DRY_fail_{self.run_id}_{stage_name}" if dry_run else self._qsub(job_file)
         )
         print(
             f"  {self.run_id} / {stage_name}: fail job submitted {job_id} (afternotok:{cime_job_id})"

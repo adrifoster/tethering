@@ -69,7 +69,7 @@ def test_advance_last_stage_returns_none(two_stage_run, mock_qsub):
 
 
 def test_advance_last_stage_does_not_call_qsub(two_stage_run, mock_qsub):
-    """Test that advance() does not call qsub when the last stage completes"""    
+    """Test that advance() does not call qsub when the last stage completes"""
     object.__setattr__(two_stage_run.stages[0].state, "_status", StageStatus.DONE)
     object.__setattr__(two_stage_run.stages[1].state, "_status", StageStatus.SUBMITTED)
     object.__setattr__(two_stage_run.stages[1].state, "_submit_time", time.time() - 100)
@@ -122,6 +122,7 @@ def test_advance_does_not_affect_other_stages(two_stage_run, mock_qsub):
     # completed stage is DONE, next is SUBMITTED — no others should change
     assert two_stage_run.stages[0].state.status is StageStatus.DONE
     assert two_stage_run.stages[1].state.status is StageStatus.SUBMITTED
+
 
 @pytest.mark.parametrize(
     "cant_advance_status",

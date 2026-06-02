@@ -16,14 +16,16 @@ _MEMORY_RE = re.compile(r"^\d+(\.\d+)?(B|KB|MB|GB|TB)$", re.IGNORECASE)
 
 # keys that belong to StageState in a flat Stage dict.
 # must be kept in sync with StageState.__init__ parameters.
-_RUNTIME_KEYS: frozenset[str] = frozenset({
-    "status",
-    "job_id", 
-    "case_root",
-    "submit_time",
-    "end_time",
-    "attempts",
-})
+_RUNTIME_KEYS: frozenset[str] = frozenset(
+    {
+        "status",
+        "job_id",
+        "case_root",
+        "submit_time",
+        "end_time",
+        "attempts",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -69,7 +71,9 @@ class StageStatus(Enum):
 
 
 _ALLOWED_TRANSITIONS: dict[StageStatus, frozenset[StageStatus]] = {
-    StageStatus.PENDING: frozenset({StageStatus.SUBMITTED, StageStatus.FAILED, StageStatus.PENDING}),
+    StageStatus.PENDING: frozenset(
+        {StageStatus.SUBMITTED, StageStatus.FAILED, StageStatus.PENDING}
+    ),
     StageStatus.SUBMITTED: frozenset({StageStatus.DONE, StageStatus.FAILED}),
     StageStatus.DONE: frozenset({StageStatus.PENDING, StageStatus.FAILED}),
     StageStatus.FAILED: frozenset({StageStatus.PENDING}),
@@ -78,7 +82,7 @@ _ALLOWED_TRANSITIONS: dict[StageStatus, frozenset[StageStatus]] = {
 
 class StageKind(Enum):
     """Stage Kind enum
-    
+
     Currently informational only; used for logging and checkpointing.
     Intended to drive stage-specific behavior (walltime defaults, spinup
     checks, post-processing) as the tethering system matures.
@@ -371,7 +375,7 @@ class StageConfig:
         object.__setattr__(self, "script", Path(self.script))
 
         _validate_walltime(self.walltime)
-        
+
         if not self.queue:
             raise ValueError("queue must not be empty.")
         if self.ncpus < 1:
@@ -384,13 +388,13 @@ class StageConfig:
                 "<number><unit> where unit is one of B, KB, MB, GB, TB. "
                 "Example: '16GB'"
             )
-                
+
     def validate(self):
         """Validate that this config is ready for submission.
-        
-        Separated from __post_init__ so StageConfig can be constructed and 
+
+        Separated from __post_init__ so StageConfig can be constructed and
         deserialized without requiring filesystem access
-        
+
         Raises:
             ValueError: if the script path does not exist
         """
@@ -473,6 +477,7 @@ class Stage:
         """
         return {**self.config.to_dict(), **self.state.to_dict()}
 
+
 def _validate_walltime(walltime: str):
     """Validate walltime for a PBS submission
 
@@ -496,4 +501,4 @@ def _validate_walltime(walltime: str):
     if len(parts) >= 3 and int(parts[-2]) > 59:
         raise ValueError(f"walltime minutes must be 00-59, got {parts[-2]!r}.")
     if all(int(part) == 0 for part in parts):
-            raise ValueError("walltime must be non-zero.")
+        raise ValueError("walltime must be non-zero.")

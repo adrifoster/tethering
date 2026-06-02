@@ -6,6 +6,7 @@ import pytest
 
 from tethering.stages import StageStatus
 
+
 def test_current_stage_returns_first_stage_when_all_pending(two_stage_run):
     """Test that current_stage returns the first stage when all are PENDING"""
     assert two_stage_run.current_stage is two_stage_run.stages[0]

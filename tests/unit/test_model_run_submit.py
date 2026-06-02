@@ -20,7 +20,10 @@ def test_submit_writes_jobscript(created_run, mock_qsub):
 
 def test_submit_raises_if_template_missing(created_run, mocker):
     """Test that submit() raises if the PBS template file is missing"""
-    mocker.patch("tethering.model_run._ENV.get_template", side_effect=TemplateNotFound("setup_script_template.txt"))
+    mocker.patch(
+        "tethering.model_run._ENV.get_template",
+        side_effect=TemplateNotFound("setup_script_template.txt"),
+    )
     with pytest.raises(TemplateNotFound):
         created_run.submit()
 
@@ -189,9 +192,7 @@ def test_submit_returns_existing_job_id_when_skipping(created_run, mock_qsub):
     assert created_run.submit() == "existing.pbs"
 
 
-def test_submit_returns_none_when_skipping_with_no_job_id(
-    created_run, mock_qsub
-):
+def test_submit_returns_none_when_skipping_with_no_job_id(created_run, mock_qsub):
     """Test that ModelRun.submit() returns empty string when skipping a stage with no job ID"""
     created_run.stages[0].state.status = StageStatus.SUBMITTED
     assert created_run.submit() is None
@@ -252,6 +253,7 @@ def test_submit_qsub_failure_does_not_persist(created_run, mocker):
         created_run.submit()
     loaded = ModelRun.load(created_run.root)
     assert loaded.stages[0].state.status is StageStatus.PENDING
+
 
 def test_submit_qsub_failure_does_not_increment_attempts(created_run, mocker):
     """Test that a qsub failure does not increment attempts"""

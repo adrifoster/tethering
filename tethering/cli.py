@@ -90,7 +90,7 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
         if not args.config:
             parser.error("--config is required with --create")
         return
-    
+
     # --root is required for all non-create actions
     if not args.root:
         parser.error("--root is required")
@@ -101,7 +101,7 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
             parser.error("--stage is required with --submit-advance")
         if not args.cime_job_id:
             parser.error("--cime-job-id is required with --submit-advance")
-            
+
     if args.submit_fail:
         if not args.stage:
             parser.error("--stage is required with --submit-fail")
@@ -113,7 +113,7 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
 
     if args.fail and not args.stage:
         parser.error("--stage is required with --fail")
-        
+
     if args.skip_script and not args.retry:
         parser.error("--skip-script only to be used with --retry")
 
@@ -148,7 +148,7 @@ def dispatch(args: argparse.Namespace) -> int:
         job_id = run.submit_advance(args.stage, args.cime_job_id, dry_run=args.dry_run)
         if job_id:
             print(f"Advance job submitted: {job_id}")
-            
+
     elif args.submit_fail:
         job_id = run.submit_fail(args.stage, args.cime_job_id, dry_run=args.dry_run)
         if job_id:
@@ -163,10 +163,12 @@ def dispatch(args: argparse.Namespace) -> int:
         run.fail(args.stage)
 
     elif args.retry:
-        job_id = run.retry(args.stage, dry_run=args.dry_run, skip_script=args.skip_script)
+        job_id = run.retry(
+            args.stage, dry_run=args.dry_run, skip_script=args.skip_script
+        )
         if job_id:
             print(f"Resubmitted: {job_id}")
-            
+
     else:
         raise RuntimeError(f"Unhandled action — this is a bug in dispatch()")
     return 0
@@ -198,4 +200,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main()) # pragma: no cover
+    sys.exit(main())  # pragma: no cover

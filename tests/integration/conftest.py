@@ -4,6 +4,7 @@ from pathlib import Path
 
 from tethering.model_run import ModelRun
 
+
 def pytest_collection_modifyitems(items):
     """Auto-skip PBS tests when qsub is not available."""
     skip_pbs = pytest.mark.skip(reason="PBS not available — run on cluster")
@@ -11,6 +12,7 @@ def pytest_collection_modifyitems(items):
         if "pbs" in item.keywords:
             if shutil.which("qsub") is None:
                 item.add_marker(skip_pbs)
+
 
 @pytest.fixture
 def script_file(tmp_path) -> Path:
@@ -31,6 +33,7 @@ def ad_stage_config_dict(script_file) -> dict:
         "kind": "ad",
     }
 
+
 @pytest.fixture
 def run_config_dict(tmp_path, ad_stage_config_dict) -> dict:
     return {
@@ -41,22 +44,27 @@ def run_config_dict(tmp_path, ad_stage_config_dict) -> dict:
         "stages": [ad_stage_config_dict],
     }
 
+
 @pytest.fixture
 def created_run(run_config_dict) -> ModelRun:
     return ModelRun.create(run_config_dict)
+
 
 @pytest.fixture
 def mock_qsub(mocker):
     mock = mocker.patch.object(ModelRun, "_qsub", return_value="12345.pbs")
     return mock
 
+
 @pytest.fixture
 def integration_run(tmp_path, ad_stage_config_dict):
     """A ModelRun with a real Derecho project code for integration tests."""
-    return ModelRun.create({
-        "root": str(tmp_path / "myrun"),
-        "run_id": "member_0001",
-        "project": "",
-        "user": "",
-        "stages": [ad_stage_config_dict],
-    })
+    return ModelRun.create(
+        {
+            "root": str(tmp_path / "myrun"),
+            "run_id": "member_0001",
+            "project": "",
+            "user": "",
+            "stages": [ad_stage_config_dict],
+        }
+    )

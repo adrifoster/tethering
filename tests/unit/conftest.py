@@ -108,6 +108,7 @@ def submitted_state() -> StageState:
         attempts=1,
     )
 
+
 @pytest.fixture
 def failed_state() -> StageState:
     """A StageState with a FAILED status"""

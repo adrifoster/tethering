@@ -309,7 +309,9 @@ def test_dispatch_retry_calls_retry_with_stage(mock_load, mock_run):
     parser = build_parser()
     args = parser.parse_args(["--retry", "--root", "/tmp/run", "--stage", "spinup_ad"])
     dispatch(args)
-    mock_run.retry.assert_called_once_with("spinup_ad", dry_run=False, skip_script=False)
+    mock_run.retry.assert_called_once_with(
+        "spinup_ad", dry_run=False, skip_script=False
+    )
 
 
 def test_dispatch_retry_calls_retry_without_stage(mock_load, mock_run):
@@ -326,7 +328,8 @@ def test_dispatch_retry_dry_run_passed_through(mock_load, mock_run):
     args = parser.parse_args(["--retry", "--root", "/tmp/run", "--dry-run"])
     dispatch(args)
     mock_run.retry.assert_called_once_with(None, dry_run=True, skip_script=False)
-    
+
+
 def test_dispatch_retry_skip_script_passed_through(mock_load, mock_run):
     """Test that retry with skip-script is passed through"""
     parser = build_parser()
@@ -340,7 +343,8 @@ def test_dispatch_retry_returns_zero(mock_load, mock_run):
     parser = build_parser()
     args = parser.parse_args(["--retry", "--root", "/tmp/run", "--stage", "spinup_ad"])
     assert dispatch(args) == 0
-    
+
+
 def test_dispatch_unhandled_action_raises(mock_load, mock_run):
     """Test that dispatch raises if no action branch matches"""
     parser = build_parser()
@@ -348,7 +352,8 @@ def test_dispatch_unhandled_action_raises(mock_load, mock_run):
     args.print_status = False  # force all branches to be False
     with pytest.raises(RuntimeError):
         dispatch(args)
-        
+
+
 @pytest.mark.parametrize(
     "argv",
     [
@@ -452,9 +457,9 @@ def test_main_unexpected_exception_prints_to_stderr(mocker, capsys):
     main(["--print-status", "--root", "/tmp/run"])
     assert "ERROR: boom" in capsys.readouterr().err
 
+
 def test_main_debug_flag_reraises_exception(mocker):
     """Test that --debug causes exceptions to propagate rather than being caught"""
     mocker.patch("tethering.cli.dispatch", side_effect=RuntimeError("boom"))
     with pytest.raises(RuntimeError, match="boom"):
         main(["--print-status", "--root", "/tmp/run", "--debug"])
-        
