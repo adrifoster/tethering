@@ -145,12 +145,12 @@ An example pipeline can be found in `tests/smoke`:
 
 ## Stage kinds
 
-These don't actually do anything right nowbut may be used in the future.
+These don't actually do anything right now, but may be used in the future.
 
 | Kind | Description |
 |------|-------------|
 | `ad` | Accelerated decomposition spinup |
-| `sasu` | Satellite phenology spinup |
+| `sasu` | SASU spinup |
 | `post-sasu` | Post-SASU stage |
 | `historical` | Historical run |
 | `custom` | Any other stage type |

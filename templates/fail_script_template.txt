@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -N {{ job_name }}
+#PBS -N {{ job_name }}_fail
 #PBS -q {{ queue }}
 #PBS -l select=1:ncpus=1:mem=1GB
 #PBS -l walltime=0:10:00
@@ -7,11 +7,11 @@
 #PBS -j oe
 #PBS -k eod
 #PBS -M {{ user }}
-#PBS -W depend=afterok:{{ cime_job_id }}
+#PBS -W depend=afternotok:{{ cime_job_id }}
 set -euo pipefail
 
 # activate conda environment
 source $(conda info --base)/etc/profile.d/conda.sh
 conda activate tethering
  
-clm-run --root {{ root }} --advance --stage {{ stage_name }}
+clm-run --root {{ root }} --fail --stage {{ stage_name }}

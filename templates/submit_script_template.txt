@@ -1,15 +1,17 @@
 #!/bin/bash
-#PBS -N {job_name}
-#PBS -q {queue}
-#PBS -l select={select}:ncpus={ncpus}:mem={memory}
-#PBS -l walltime={walltime}
-#PBS -A {project}
-#PBS -o {log_file}
+#PBS -N {{ job_name }}
+#PBS -q {{ queue }}
+#PBS -l select={{ select }}:ncpus={{ ncpus }}:mem={{ memory }}
+#PBS -l walltime={{ walltime }}
+#PBS -A {{ project }}
+#PBS -o {{ log_file }}
 #PBS -j oe
 #PBS -k eod
-#PBS -M {user}
-
-{depend_line}{extra}
+#PBS -M {{ user }}
+{% if depend_job_id %}
+#PBS -W depend=afterok:{{ depend_job_id }}
+{% endif %}
+{{ extra }}
 
 # activate conda environment
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -17,23 +19,29 @@ conda activate tethering
 
 set -euo pipefail
  
-trap 'clm-run --root {root} --fail --stage {name}' ERR
+trap 'clm-run --root {{ root }} --fail --stage {{ name }}' ERR
  
-echo "=== Run: {run_id} / stage: {name} ==="
+echo "=== Run: {{ run_id }} / stage: {{ name }} ==="
 echo "=== Started: $(date) ==="
- 
+
+{% if not skip_script %}
 # create, configure, and build the CIME case
 # strict mode is enforced even if the user's script doesn't set it
-bash -c 'set -euo pipefail; source "$0" "$@"' {script} {case_root} {previous_case}
- 
+bash -c 'set -euo pipefail; source "$0" "$@"' {{ script }} {{ case_root }} {{ previous_case }}
+{% endif %}
+
+{% if cime %}
 # submit the CIME case; capture the final job ID (short-term archiver)
-cd {case_root}
+cd {{ case_root }}
 ./case.submit --resubmit-immediate
 JOB_IDS=$(./xmlquery JOB_IDS)
-FINAL_JOB_ID=${{JOB_IDS##*:}}
+FINAL_JOB_ID=${JOB_IDS##*:}
 echo "CIME submitted, final job ID: $FINAL_JOB_ID"
  
-# 3. write and submit the advance job in Python, with the real job ID
-clm-run --root {root} --submit-advance --stage {name} --cime-job-id $FINAL_JOB_ID
- 
+clm-run --root {{ root }} --submit-advance --stage {{ root }} --cime-job-id $FINAL_JOB_ID
+clm-run --root {{ root }} --submit-fail --stage {{ root }} --cime-job-id $FINAL_JOB_ID
+{% else %}
+clm-run --root {{ root }} --advance --stage {{ name }}
+{% endif %}
+
 echo "=== Setup complete: $(date) ==="
