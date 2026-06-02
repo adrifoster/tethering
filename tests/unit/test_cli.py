@@ -309,7 +309,7 @@ def test_dispatch_retry_calls_retry_with_stage(mock_load, mock_run):
     parser = build_parser()
     args = parser.parse_args(["--retry", "--root", "/tmp/run", "--stage", "spinup_ad"])
     dispatch(args)
-    mock_run.retry.assert_called_once_with("spinup_ad", dry_run=False)
+    mock_run.retry.assert_called_once_with("spinup_ad", dry_run=False, skip_script=False)
 
 
 def test_dispatch_retry_calls_retry_without_stage(mock_load, mock_run):
@@ -317,7 +317,7 @@ def test_dispatch_retry_calls_retry_without_stage(mock_load, mock_run):
     parser = build_parser()
     args = parser.parse_args(["--retry", "--root", "/tmp/run"])
     dispatch(args)
-    mock_run.retry.assert_called_once_with(None, dry_run=False)
+    mock_run.retry.assert_called_once_with(None, dry_run=False, skip_script=False)
 
 
 def test_dispatch_retry_dry_run_passed_through(mock_load, mock_run):
@@ -325,7 +325,14 @@ def test_dispatch_retry_dry_run_passed_through(mock_load, mock_run):
     parser = build_parser()
     args = parser.parse_args(["--retry", "--root", "/tmp/run", "--dry-run"])
     dispatch(args)
-    mock_run.retry.assert_called_once_with(None, dry_run=True)
+    mock_run.retry.assert_called_once_with(None, dry_run=True, skip_script=False)
+    
+def test_dispatch_retry_skip_script_passed_through(mock_load, mock_run):
+    """Test that retry with skip-script is passed through"""
+    parser = build_parser()
+    args = parser.parse_args(["--retry", "--root", "/tmp/run", "--skip-script"])
+    dispatch(args)
+    mock_run.retry.assert_called_once_with(None, dry_run=False, skip_script=True)
 
 
 def test_dispatch_retry_returns_zero(mock_load, mock_run):

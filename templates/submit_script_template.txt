@@ -38,8 +38,8 @@ JOB_IDS=$(./xmlquery JOB_IDS)
 FINAL_JOB_ID=${JOB_IDS##*:}
 echo "CIME submitted, final job ID: $FINAL_JOB_ID"
  
-clm-run --root {{ root }} --submit-advance --stage {{ root }} --cime-job-id $FINAL_JOB_ID
-clm-run --root {{ root }} --submit-fail --stage {{ root }} --cime-job-id $FINAL_JOB_ID
+clm-run --root {{ root }} --submit-advance --stage {{ name }} --cime-job-id $FINAL_JOB_ID
+clm-run --root {{ root }} --submit-fail --stage {{ name }} --cime-job-id $FINAL_JOB_ID
 {% else %}
 clm-run --root {{ root }} --advance --stage {{ name }}
 {% endif %}

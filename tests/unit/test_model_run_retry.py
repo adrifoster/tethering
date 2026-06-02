@@ -12,14 +12,14 @@ def test_retry_calls_submit_stage(created_run, mocker):
     created_run.stages[0].state.status = StageStatus.FAILED
     mock = mocker.patch.object(created_run, "_submit_stage", return_value="12345.pbs")
     created_run.retry("spinup_ad")
-    mock.assert_called_once_with(created_run.stages[0], dry_run=False)
+    mock.assert_called_once_with(created_run.stages[0], dry_run=False, skip_script=False)
 
 
 def test_retry_resets_to_pending_before_submitting(created_run, mocker):
     """Test that retry() resets stage to PENDING before calling _submit_stage"""
     created_run.stages[0].state.status = StageStatus.FAILED
 
-    def check_status(stage, dry_run=False):
+    def check_status(stage, dry_run=False, skip_script=False):
         assert stage.state.status is StageStatus.PENDING
         assert stage.state.end_time is None
         assert stage.state.submit_time is None
@@ -85,7 +85,7 @@ def test_retry_uses_current_stage_when_no_name_given(two_stage_run, mocker):
     two_stage_run.stages[0].state.status = StageStatus.FAILED
     mock = mocker.patch.object(two_stage_run, "_submit_stage", return_value="12345.pbs")
     two_stage_run.retry(None)
-    mock.assert_called_once_with(two_stage_run.stages[0], dry_run=False)
+    mock.assert_called_once_with(two_stage_run.stages[0], dry_run=False, skip_script=False)
 
 
 def test_retry_returns_none_when_nothing_to_retry(two_stage_run, mocker):
@@ -102,7 +102,13 @@ def test_retry_dry_run_passed_through(created_run, mocker):
     """Test that retry() passes dry_run through to _submit_stage"""
     mock = mocker.patch.object(created_run, "_submit_stage", return_value="DRY_run")
     created_run.retry("spinup_ad", dry_run=True)
-    mock.assert_called_once_with(created_run.stages[0], dry_run=True)
+    mock.assert_called_once_with(created_run.stages[0], dry_run=True, skip_script=False)
+    
+def test_retry_skip_script_passed_through(created_run, mocker):
+    """Test that retry() passes skip_script through to _submit_stage"""
+    mock = mocker.patch.object(created_run, "_submit_stage", return_value="DRY_run")
+    created_run.retry("spinup_ad", skip_script=True)
+    mock.assert_called_once_with(created_run.stages[0], dry_run=False, skip_script=True)
 
 
 def test_retry_unknown_stage_raises(created_run, mocker):
