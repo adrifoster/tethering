@@ -223,6 +223,9 @@ class ModelRun:
         try:
             idx = self.stage_names.index(after)
         except ValueError as exc:
+            # this branch is theoretically unreachable via the public API since callers
+            # first go through _stage() which raises the same error so this is defensive
+            # in case we ever call this without _stage first
             raise ValueError(
                 f"No stage named {after!r}. " f"Known stages: {self.stage_names}"
             ) from exc

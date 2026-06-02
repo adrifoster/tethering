@@ -98,6 +98,12 @@ def test_stage_kind_no_implicit_string_equality():
 # ---------------------------------------------------------------------------
 
 
+def test_stage_state_invalid_status_type_raises():
+    """Test that a StageState initialized with a non-StageStatus status raises TypeError"""
+    with pytest.raises(TypeError, match="status"):
+        StageState(status="pending")
+
+
 def test_stage_state_can_set_submit_time():
     """Test StageState can set the submit time correctly"""
     state = StageState()
@@ -240,6 +246,12 @@ def test_stage_state_equality(submitted_state):
     assert submitted_state == other
 
 
+def test_stage_state_equality_with_non_stage_state_returns_not_implemented():
+    """Test that comparing a StageState to a non-StageState returns NotImplemented"""
+    state = StageState()
+    assert state.__eq__("not a StageState") is NotImplemented
+
+
 @pytest.mark.parametrize(
     "field,value",
     [
@@ -266,6 +278,56 @@ def test_runtime_keys_match_stage_state_init():
     assert _RUNTIME_KEYS == actual, (
         f"_RUNTIME_KEYS is out of sync with StageState.__init__. "
         f"Missing: {actual - _RUNTIME_KEYS}, Extra: {_RUNTIME_KEYS - actual}"
+    )
+
+
+@pytest.mark.parametrize(
+    "from_status,to_status",
+    [
+        (StageStatus.PENDING, StageStatus.SUBMITTED),
+        (StageStatus.PENDING, StageStatus.FAILED),
+        (StageStatus.PENDING, StageStatus.PENDING),
+        (StageStatus.SUBMITTED, StageStatus.DONE),
+        (StageStatus.SUBMITTED, StageStatus.FAILED),
+        (StageStatus.DONE, StageStatus.PENDING),
+        (StageStatus.DONE, StageStatus.FAILED),
+        (StageStatus.FAILED, StageStatus.PENDING),
+    ],
+)
+def test_stage_state_valid_status_transitions(from_status, to_status):
+    """Test all allowed status transitions succeed"""
+    state = StageState(status=from_status)
+    state.status = to_status
+    assert state.status is to_status
+
+
+@pytest.mark.parametrize(
+    "from_status,to_status",
+    [
+        (StageStatus.PENDING, StageStatus.DONE),
+        (StageStatus.SUBMITTED, StageStatus.PENDING),
+        (StageStatus.SUBMITTED, StageStatus.SUBMITTED),
+        (StageStatus.DONE, StageStatus.SUBMITTED),
+        (StageStatus.DONE, StageStatus.DONE),
+        (StageStatus.FAILED, StageStatus.SUBMITTED),
+        (StageStatus.FAILED, StageStatus.DONE),
+        (StageStatus.FAILED, StageStatus.FAILED),
+    ],
+)
+def test_stage_state_invalid_status_transitions(from_status, to_status):
+    """Test all disallowed status transitions raise ValueError"""
+    state = StageState(status=from_status)
+    with pytest.raises(ValueError, match="Invalid status transition"):
+        state.status = to_status
+
+
+def test_stage_state_repr(failed_state):
+    """Test StageState.__repr__"""
+    result = repr(failed_state)
+    assert result == (
+        f"StageState(status={failed_state.status!r}, job_id={failed_state.job_id!r}, "
+        f"case_root={failed_state.case_root!r}, submit_time={failed_state.submit_time!r}, "
+        f"end_time={failed_state.end_time!r}, attempts={failed_state.attempts!r})"
     )
 
 

@@ -101,6 +101,45 @@ def test_validate_args_submit_advance_without_cime_job_id_raises():
     assert exc.value.code == 2
 
 
+def test_validate_args_submit_fail_with_all_args_passes():
+    """Test that submit-fail with correct arguments passes"""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "--submit-fail",
+            "--root",
+            "/tmp/run",
+            "--stage",
+            "spinup_ad",
+            "--cime-job-id",
+            "12345.pbs",
+        ]
+    )
+    validate_args(args, parser)
+
+
+def test_validate_args_submit_fail_without_stage_raises():
+    """Test that submit-fail without stage fails"""
+    parser = build_parser()
+    args = parser.parse_args(
+        ["--submit-fail", "--root", "/tmp/run", "--cime-job-id", "12345.pbs"]
+    )
+    with pytest.raises(SystemExit) as exc:
+        validate_args(args, parser)
+    assert exc.value.code == 2
+
+
+def test_validate_args_submit_fail_without_cime_job_id_raises():
+    """Test that submit-fail without cime job id fails"""
+    parser = build_parser()
+    args = parser.parse_args(
+        ["--submit-fail", "--root", "/tmp/run", "--stage", "spinup_ad"]
+    )
+    with pytest.raises(SystemExit) as exc:
+        validate_args(args, parser)
+    assert exc.value.code == 2
+
+
 def test_validate_args_advance_with_stage_passes():
     """Test that advance with stage passes"""
     parser = build_parser()
@@ -147,6 +186,32 @@ def test_validate_args_retry_with_stage_passes():
     parser = build_parser()
     args = parser.parse_args(["--retry", "--root", "/tmp/run", "--stage", "spinup_ad"])
     validate_args(args, parser)
+
+
+def test_validate_args_retry_with_skip_script_passes():
+    """Test that fail with a stage passes"""
+    parser = build_parser()
+    args = parser.parse_args(
+        ["--retry", "--root", "/tmp/run", "--stage", "spinup_ad", "--skip-script"]
+    )
+    validate_args(args, parser)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--submit", "--root", "my_run"],
+        ["--advance", "--root", "/tmp/run", "--stage", "spinup_ad"],
+        ["--fail", "--root", "/tmp/run", "--stage", "spinup_ad"],
+        ["--submit-advance", "--root", "/tmp/run", "--stage", "spinup_ad", "--cime-job-id", "12345.pbs"],
+        ["--submit-fail", "--root", "/tmp/run", "--stage", "spinup_ad", "--cime-job-id", "12345.pbs"],
+    ],
+)
+def test_validate_args_skip_script_without_retry_raises(argv):
+    """Test that using --skip-script for anything other than --retry fails"""
+    with pytest.raises(SystemExit) as exc:
+        main(argv + ["--skip-script"])
+    assert exc.value.code == 2
 
 
 def test_dispatch_create_calls_model_run_create(mock_create):
@@ -243,12 +308,68 @@ def test_dispatch_submit_advance_dry_run_passed_through(mock_load, mock_run):
     )
 
 
-def test_dispatch_submit_advance_returns_zero(mock_load, mock_run):
-    """Test that submit-advance returns zero"""
+def test_dispatch_submit_fail_returns_zero(mock_load, mock_run):
+    """Test that submit-fail returns zero"""
     parser = build_parser()
     args = parser.parse_args(
         [
-            "--submit-advance",
+            "--submit-fail",
+            "--root",
+            "/tmp/run",
+            "--stage",
+            "spinup_ad",
+            "--cime-job-id",
+            "55555.pbs",
+        ]
+    )
+    assert dispatch(args) == 0
+
+
+def test_dispatch_submit_fail_calls_submit_fail(mock_load, mock_run):
+    """Test that submit-fail actually calls model_run.submit_fail"""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "--submit-fail",
+            "--root",
+            "/tmp/run",
+            "--stage",
+            "spinup_ad",
+            "--cime-job-id",
+            "55555.pbs",
+        ]
+    )
+    dispatch(args)
+    mock_run.submit_fail.assert_called_once_with(
+        "spinup_ad", "55555.pbs", dry_run=False
+    )
+
+
+def test_dispatch_submit_fail_dry_run_passed_through(mock_load, mock_run):
+    """Test that submit-fail with a dry run is passed through"""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "--submit-fail",
+            "--root",
+            "/tmp/run",
+            "--stage",
+            "spinup_ad",
+            "--cime-job-id",
+            "55555.pbs",
+            "--dry-run",
+        ]
+    )
+    dispatch(args)
+    mock_run.submit_fail.assert_called_once_with("spinup_ad", "55555.pbs", dry_run=True)
+
+
+def test_dispatch_submit_fail_returns_zero(mock_load, mock_run):
+    """Test that submit-fail returns zero"""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "--submit-fail",
             "--root",
             "/tmp/run",
             "--stage",
