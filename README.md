@@ -25,8 +25,8 @@ Thus, only the first stage needs to be manually submitted. The rest of the pipel
 ### Requirements
 
 - Python >= 3.12
-- A PBS cluster with `qsub` available
-- CESM/CLM set up on the cluster
+- A machine with PBS
+- CESM/CLM set up on your machine
 
 ### With conda (recommended)
 
@@ -102,12 +102,17 @@ clm-run --root <path> --print-status
 clm-run --root <path> --submit [--dry-run]
   Submit the first pending stage.
 
-clm-run --root <path> --retry [--stage <name>] [--dry-run]
+clm-run --root <path> --retry [--stage <name>] [--dry-run] [--skip-script]
   Reset and resubmit a failed stage. If --stage is omitted,
-  retries the current (first non-complete) stage.
+  retries the current (first non-complete) stage. if --skip-script, it will
+  just resubmit without re-running the setup script
 
 clm-run --root <path> --submit-advance --stage <name> --cime-job-id <id>
   Submit the advance job for a stage. Called automatically
+  from inside the setup job — not typically run manually.
+  
+clm-run --root <path> --submit-fail --stage <name> --cime-job-id <id>
+  Submit a fail job for a stage in case the CLM job dies. Called automatically
   from inside the setup job — not typically run manually.
 
 clm-run --root <path> --advance --stage <name>
@@ -132,13 +137,11 @@ bash <script> <case_root> <optional_previous_case_root>
 ```
 
 > [!WARNING]
-> DOT NOT add `./case.submit` to the end of your scripts!
-
-The tethering pipeline takes care of this.
+> DOT NOT add `./case.submit` to the end of your scripts! The tethering pipeline takes care of this.
 
 An example pipeline can be found in `tests/smoke`:
 
-`smoke_test.yaml`: an example run.yaml file that can be used to create the `ModelRun` instance.
+`smoke_test.yaml`: an example run.yaml file that can be used to create the `ModelRun` instance.  
 `scripts/`: directory with four scripts: `run_job_ad.sh`, `run_job_sasu.sh`, `run_job_postad.sh`, and `smoke_check.sh`. The first three can be used as example scripts to create your own setup scripts.
 
 ----
