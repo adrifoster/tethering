@@ -5,11 +5,15 @@ channels:
 dependencies:
   - python=3.12
   - pip
+  - xarray
+  - numpy
+  - netcdf4
+  - matplotlib
   # --- dev / test ---
   - pytest>=8
   - pytest-cov
   - pytest-mock
   - pip:
-    - -e . 
-    - black
-    - jinja2
+      - black
+      - jinja2
+      - -e .

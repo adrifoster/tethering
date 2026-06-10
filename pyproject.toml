@@ -8,7 +8,10 @@ version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
 "pyyaml",
-"jinja2"
+"jinja2",
+"xarray",
+"netcdf4",
+"numpy",
 ]
  
 [project.scripts]
