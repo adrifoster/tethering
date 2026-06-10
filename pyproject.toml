@@ -12,6 +12,7 @@ dependencies = [
 "xarray",
 "netcdf4",
 "numpy",
+"nc-time-axis",
 ]
  
 [project.scripts]

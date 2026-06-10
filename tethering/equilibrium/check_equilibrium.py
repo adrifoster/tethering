@@ -1,15 +1,16 @@
-"""Utility function for checking equilibrium status of a run"""
+"""Functions for checking equilibrium status of a run"""
 
 from __future__ import annotations
 from pathlib import Path
 import glob
 import subprocess 
 import logging
+from typing import Optional
 
 import xarray as xr
 
 from .spectral_element_grid import SpectralElementGrid
-from .variable_spec import get_specs, VariableSpec
+from .variable_spec import get_specs, VariableSpec, GriddedSpec
 
 log = logging.getLogger(__name__)
 
@@ -232,53 +233,57 @@ def concat_files(files: list[str], dataset_vars: list[str], output_path: Path):
             f"stdout: {result.stdout}"
         )
     
-def load_annual_dataset(files: list[str], dataset_vars: list[str],
-                        freq: str, is_se: bool = False) -> xr.Dataset:
-    """Load history files into an annual-mean xr.Dataset.
-    
-    Concatenates files via concat_files(), opens the result, loads into
-    memory, then cleans up the temp file. Monthly files are resampled to
-    annual means.
+def reconstruct_tws(ds: xr.Dataset) -> xr.DataArray:
+    """Reconstruct TWS from water storage components when TWS is absent
 
     Args:
-        files (list[str]): ordererd list of file paths
-        dataset_vars (list[str]): dataset variables to include
-        freq (str): frequency: "monthly" or "annual"
-        is_se (bool, optional): If True, regrid from spectral element to regular. Defaults
-        to False.
+        ds (xr.Dataset): input dataset with required variables
 
     Returns:
-        xr.Dataset: _description_
+        xr.DataArray: TWS dataarray
     """
-    concat_path = concat_files(files, dataset_vars, output_path)
-    
-    try:
-        if is_se:
-            # regrid spectral element grid to regular
-            if weight_file is None:
-                raise ValueError(
-                    "A weighting file is required to regrid spectral element grids"
-                )
-            ds = regrid_data(concat_path, weight_file)
+    return (
+        ds["H2OCAN"]
+        + ds["H2OSNO"]
+        + ds["WA"]
+        + ds["SOILLIQ"].sum(dim="levgrnd", keep_attrs=True)
+        + ds["SOILICE"].sum(dim="levgrnd", keep_attrs=True)
+    )
+
+
+def build_timeseries(
+    ds: xr.Dataset,
+    specs: tuple[VariableSpec, ...],
+    land_area: xr.DataArray,
+    absent_optional: set[str],
+) -> dict[str, Optional[xr.DataArray]]:
+    """
+    Compute scalar (global) or gridded timeseries for each variable spec.
+    Returns None for absent optional variables.
+    """
+    # reconstruct TWS if needed
+    tws_reconstructed: Optional[xr.DataArray] = None
+    if "TWS" not in ds and all(
+        v in ds for v in ["H2OCAN", "H2OSNO", "WA", "SOILLIQ", "SOILICE"]
+    ):
+        tws_reconstructed = reconstruct_tws(ds)
+ 
+    timeseries: dict[str, Optional[xr.DataArray]] = {}
+ 
+    for spec in specs:
+        if spec.name in absent_optional:
+            timeseries[spec.name] = None
+            continue
+ 
+        # resolve raw DataArray
+        if spec.name == "TWS" and "TWS" not in ds:
+            if tws_reconstructed is None:
+                timeseries[spec.name] = None
+                continue
+            raw = tws_reconstructed
         else:
-            ds = xr.open_dataset(str(concat_path), decode_timedelta=False)
-            ds.load()
-        if freq == "monthly":
-            ds = ds.resample(time="YE").mean()
-    finally:
-        concat_path.unlink(missing_ok=True)
-    
-    return ds
-
-
-# def check_equilibrium(base_dir, case_name, tape, user_name):
-
-#     # get files
-#     hist_dir = base_dir / user_name / "archive" / case_name / "lnd/hist"
-#     if not hist_dir.exists:
-#         raise FileNotFoundError(
-#             f"History directory does not exist: {hist_dir}\n"
-#             "Check user_name, case_name, and base_dir"
-#     )
-#     files = find_history_files(hist_dir, case_name, tape)
-#     land_area = get_land_area(files[0], se_grid))
+            raw = ds[spec.dataset_var]
+            
+        timeseries[spec.name] = spec.convert(raw, land_area)
+ 
+    return timeseries

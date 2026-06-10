@@ -9,6 +9,7 @@ dependencies:
   - numpy
   - netcdf4
   - matplotlib
+  - nc-time-axis
   # --- dev / test ---
   - pytest>=8
   - pytest-cov

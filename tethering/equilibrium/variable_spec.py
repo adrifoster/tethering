@@ -39,17 +39,16 @@ class VariableSpec(ABC):
 
     @abstractmethod
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, lasum: float
-    ):
+        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray
+    ) -> xr.DataArray:
         """Convert to the correct units
 
         Args:
             raw_values (xr.DataArray): input raw data array
             land_area_m2 (xr.DataArray): land area data array [m2]
-            lasum (float): sum of land area [m2]
 
         Returns:
-            _type_: _description_
+            xr.DataArray: output converted array
         """
 
 
@@ -68,9 +67,9 @@ class SummedSpec(VariableSpec):
     cf_base: float = field(kw_only=True)
 
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, lasum: float
+        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray
     ):
-        return self.cf_base * (land_area_m2 * raw_values).sum()
+        return self.cf_base * (land_area_m2 * raw_values).sum(dim=['lat', 'lon'])
 
 
 @dataclass(frozen=True)
@@ -88,9 +87,10 @@ class MeanSpec(VariableSpec):
     cf_base: float = field(kw_only=True)
 
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, lasum: float
+        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray
     ):
-        return self.cf_base * (land_area_m2 * raw_values).sum() / lasum
+        la_sum = land_area_m2.sum(dim=['lat', 'lon'])
+        return self.cf_base * (land_area_m2 * raw_values).sum(dim=["lat", "lon"]) / la_sum
 
 
 @dataclass(frozen=True)

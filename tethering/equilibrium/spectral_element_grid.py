@@ -75,55 +75,55 @@ class SpectralElementGrid:
         """Derived weight file name, matching the NCL convention."""
         return f"{self.src_grid}_to_{self.dest_grid}_{self.map_method}.nc"
 
-    # def generate_weights(self):
-    #     """Generate an ESMF regridding weight file using ESMF_RegridWeightGen
-    #     if it does not already exist, then return its path.
+    def generate_weights(self):
+        """Generate an ESMF regridding weight file using ESMF_RegridWeightGen
+        if it does not already exist, then return its path.
 
-    #     Args:
-    #         output_dir (Path): path to output directory where weight file will be written
+        Args:
+            output_dir (Path): path to output directory where weight file will be written
 
-    #     Raises:
-    #         RuntimeError: ESFM_RegridWeightGen failed
+        Raises:
+            RuntimeError: ESFM_RegridWeightGen failed
 
-    #     Returns:
-    #         Path: path to generated weight file
-    #     """
+        Returns:
+            Path: path to generated weight file
+        """
 
-    #     weight_file = self.weight_dir / str(self.weight_file_name)
+        weight_file = self.weight_dir / str(self.weight_file_name)
 
-    #     if weight_file.exists():
-    #         log.info("Found existing weight file: %s", weight_file)
-    #         return weight_file
-    #     log.info(
-    #         "Generating weight file %s -> %s (%s): %s",
-    #         self.src_grid,
-    #         self.dest_grid,
-    #         self.map_method,
-    #         weight_file,
-    #     )
-    #     cmd = [
-    #         find_tool("ESMF_RegridWeightGen"),
-    #         "--source",
-    #         str(self.src_grid_file),
-    #         "--destination",
-    #         str(self.dest_grid_file),
-    #         "--weight",
-    #         str(weight_file),
-    #         "--method",
-    #         self.map_method,
-    #         "--src_type",
-    #         "SCRIP",
-    #         "--dst_type",
-    #         "SCRIP",
-    #     ]
-    #     result = subprocess.run(cmd, capture_output=True, text=True)
-    #     if result.returncode != 0:
-    #         raise RuntimeError(
-    #             f"ESMF_RegridWeightGen failed (exit {result.returncode}):\n"
-    #             f"{result.stderr}"
-    #         )
-    #     return weight_file
-
+        if weight_file.exists():
+            log.info("Found existing weight file: %s", weight_file)
+            return weight_file
+        log.info(
+            "Generating weight file %s -> %s (%s): %s",
+            self.src_grid,
+            self.dest_grid,
+            self.map_method,
+            weight_file,
+        )
+        cmd = [
+            find_tool("ESMF_RegridWeightGen"),
+            "--source",
+            str(self.src_grid_file),
+            "--destination",
+            str(self.dest_grid_file),
+            "--weight",
+            str(weight_file),
+            "--method",
+            self.map_method,
+            "--src_type",
+            "SCRIP",
+            "--dst_type",
+            "SCRIP",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"ESMF_RegridWeightGen failed (exit {result.returncode}):\n"
+                f"{result.stderr}"
+            )
+        return weight_file
+    
     def regrid_spatial_metadata(self, nc_file: Path) -> xr.Dataset:
         """Run ncremap on a netcdf file to produce a regridded file containing area and 
         landfrac on the destination grid.
@@ -181,7 +181,6 @@ class SpectralElementGrid:
         
         cmd = [
             find_tool("ncremap"),
-            "-O",
             "-P", "clm",
             "--sgs_frc=landfrac", "--sgs_msk=landmask",
             "-m", str(self.weight_file),
@@ -191,7 +190,9 @@ class SpectralElementGrid:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(
-                f"ncremap failed (exit {result.returncode}):\n{result.stderr}"
+                f"ncremap failed (exit {result.returncode}):\n"
+                f"stderr: {result.stderr}\n"
+                f"stdout: {result.stdout}"
             )
         ds = xr.open_dataset(str(output_path), decode_timedelta=False)
         ds.load()
