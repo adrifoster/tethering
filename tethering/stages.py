@@ -289,7 +289,7 @@ class StageState:
     def to_dict(self) -> dict:
         """Serialize to a plain dictionary
 
-        Note that the ``status`` value is stored as its string representation so that
+        Note that the status value is stored as its string representation so that
         the dict is directly JSON-serializable without a custom encoder.
 
         Returns:

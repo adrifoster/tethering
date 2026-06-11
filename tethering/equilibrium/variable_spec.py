@@ -39,13 +39,15 @@ class VariableSpec(ABC):
 
     @abstractmethod
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray
+        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, spatial_dims: list[str]
     ) -> xr.DataArray:
         """Convert to the correct units
 
         Args:
             raw_values (xr.DataArray): input raw data array
             land_area_m2 (xr.DataArray): land area data array [m2]
+            spatial_dims (list[str]): spatial dimensions to aggregate over, 
+            e.g. ['lat', 'lon'] for regular grids or ['lndgrid'] for spectral element grids
 
         Returns:
             xr.DataArray: output converted array
@@ -67,9 +69,9 @@ class SummedSpec(VariableSpec):
     cf_base: float = field(kw_only=True)
 
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray
+        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, spatial_dims: list[str]
     ):
-        return self.cf_base * (land_area_m2 * raw_values).sum(dim=['lat', 'lon'])
+        return self.cf_base * (land_area_m2 * raw_values).sum(dim=spatial_dims)
 
 
 @dataclass(frozen=True)
@@ -87,10 +89,10 @@ class MeanSpec(VariableSpec):
     cf_base: float = field(kw_only=True)
 
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray
+        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, spatial_dims: list[str]
     ):
-        la_sum = land_area_m2.sum(dim=['lat', 'lon'])
-        return self.cf_base * (land_area_m2 * raw_values).sum(dim=["lat", "lon"]) / la_sum
+        la_sum = land_area_m2.sum(dim=spatial_dims)
+        return self.cf_base * (land_area_m2 * raw_values).sum(dim=spatial_dims) / la_sum
 
 
 @dataclass(frozen=True)
@@ -101,7 +103,7 @@ class GriddedSpec(VariableSpec):
     """
 
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, lasum: float
+        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, spatial_dims: str
     ):
         return raw_values  # caller handles drift per-cell
 
@@ -191,7 +193,7 @@ _FATES_OVERRIDES: dict[str, VariableSpec] = {
 }
 
 
-def get_specs(fates: bool) -> tuple[VariableSpec, ...]:
+def get_specs(fates: bool = False) -> tuple[VariableSpec, ...]:
     """Return the full variable spec tuple for CLM or FATES."""
     if not fates:
         return _CLM_SPECS

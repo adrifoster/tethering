@@ -17,11 +17,6 @@ class SpectralElementGrid:
     """
     Class for spectral element (unstructured) grid support.
 
-    The weight file is generated automatically using ESMF_RegridWeightGen
-    if it does not already exist, mirroring the original spinup_stability NCL script behavior.
-    The generated file is named {src_grid}_to_{dst_grid}_{map_method}.nc
-    and written to the output_dir
-
     Parameters
     ----------
     src_grid (str):
@@ -47,7 +42,7 @@ class SpectralElementGrid:
         src_grid_file: Path,
         dest_grid: str,
         dest_grid_file: Path,
-        weight_dir: Path,
+        weight_dir: Path | None = None,
         map_method: str = "conserve",
     ):
 
@@ -59,7 +54,8 @@ class SpectralElementGrid:
             raise FileNotFoundError(
                 f"SE dst grid SCRIP file not found: {dest_grid_file}"
             )
-        weight_dir.mkdir(parents=True, exist_ok=True)
+        if weight_dir is not None:
+            weight_dir.mkdir(parents=True, exist_ok=True)
         self.weight_dir = weight_dir
             
         self.src_grid_file = Path(src_grid_file)
@@ -67,8 +63,26 @@ class SpectralElementGrid:
         self.src_grid = src_grid
         self.dest_grid = dest_grid
         self.map_method = map_method
+        self.weight_file = None
         
-        self.weight_file = self.generate_weights()
+    @classmethod
+    def from_dict(cls, cfg: dict) -> SpectralElementGrid:
+        """Construct a SpectralElementGrid from a config dict.
+
+        Parameters
+        ----------
+        cfg:
+            Dict with keys: src_grid, src_grid_file, dest_grid, dest_grid_file,
+            and optionally map_method and weight_dir.
+        """
+        return cls(
+            src_grid=cfg["src_grid"],
+            src_grid_file=Path(cfg["src_grid_file"]),
+            dest_grid=cfg["dest_grid"],
+            dest_grid_file=Path(cfg["dest_grid_file"]),
+            weight_dir=Path(cfg["weight_dir"]) if "weight_dir" in cfg else None,
+            map_method=cfg.get("map_method", "conserve"),
+        )
 
     @property
     def weight_file_name(self) -> str:
