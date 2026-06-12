@@ -9,28 +9,29 @@ import yaml
 from .spectral_element_grid import SpectralElementGrid
 
 _DEFAULT_THRESHOLDS: dict[str, float] = {
-    "TOTECOSYSC":         0.02,
-    "TOTSOMC":            0.02,
-    "TOTVEGC":            0.02,
-    "TLAI":               0.02,
-    "GPP":                0.02,
-    "TWS":                0.001,
-    "H2OSNO":             1.0,
+    "TOTECOSYSC": 0.02,
+    "TOTSOMC": 0.02,
+    "TOTVEGC": 0.02,
+    "TLAI": 0.02,
+    "GPP": 0.02,
+    "TWS": 0.001,
+    "H2OSNO": 1.0,
     "TOTECOSYSC_gridded": 1.0,
 }
 
 _DEFAULT_CYCLE_YEARS = 20
 _DEFAULT_PCT_LAND = 3.0
 
+
 @dataclass
 class EquilibriumConfig:
     """
     User-configurable parameters for equilibrium checking.
- 
+
     Variable definitions (which variables to check, their dataset names,
     units, and conversion factors) are hard-coded in _CLM_SPECS and
     _FATES_OVERRIDES. Only thresholds and run parameters belong here.
- 
+
     Parameters
     ----------
     cycle_years:
@@ -47,30 +48,33 @@ class EquilibriumConfig:
         For TOTECOSYSC_gridded: max acceptable % of land area with
         per-cell drift above the gridded threshold. Defaults to 3.0.
     se_grid:
-        If provided, treat history files as spectral element (unstructured) grid. 
+        If provided, treat history files as spectral element (unstructured) grid.
         If None, assume regular gridded lat/lon.
     """
+
     cycle_years: int = _DEFAULT_CYCLE_YEARS
-    thresholds: dict[str, float] = field(default_factory=lambda: dict(_DEFAULT_THRESHOLDS))
+    thresholds: dict[str, float] = field(
+        default_factory=lambda: dict(_DEFAULT_THRESHOLDS)
+    )
     fates: bool = False
     pct_landarea: float = _DEFAULT_PCT_LAND
     se_grid: SpectralElementGrid | None = None
-    
+
     def __post_init__(self):
         if self.cycle_years < 1:
             raise ValueError(f"cycle_years must be >= 1, got {self.cycle_years}.")
         if not self.thresholds:
             raise ValueError("thresholds must not be empty.")
-    
+
     @classmethod
     def create(cls, config: str | Path | dict | None = None) -> EquilibriumConfig:
-        
+
         cfg = _load_config(config if config else {})
- 
+
         se_grid = None
         if "se_grid" in cfg:
             se_grid = SpectralElementGrid.from_dict(cfg["se_grid"])
- 
+
         return cls(
             cycle_years=cfg.get("cycle_years", _DEFAULT_CYCLE_YEARS),
             thresholds={**_DEFAULT_THRESHOLDS, **cfg.get("thresholds", {})},

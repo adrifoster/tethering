@@ -57,14 +57,14 @@ class SpectralElementGrid:
         if weight_dir is not None:
             weight_dir.mkdir(parents=True, exist_ok=True)
         self.weight_dir = weight_dir
-            
+
         self.src_grid_file = Path(src_grid_file)
         self.dest_grid_file = Path(dest_grid_file)
         self.src_grid = src_grid
         self.dest_grid = dest_grid
         self.map_method = map_method
         self.weight_file = None
-        
+
     @classmethod
     def from_dict(cls, cfg: dict) -> SpectralElementGrid:
         """Construct a SpectralElementGrid from a config dict.
@@ -137,9 +137,9 @@ class SpectralElementGrid:
                 f"{result.stderr}"
             )
         return weight_file
-    
+
     def regrid_spatial_metadata(self, nc_file: Path) -> xr.Dataset:
-        """Run ncremap on a netcdf file to produce a regridded file containing area and 
+        """Run ncremap on a netcdf file to produce a regridded file containing area and
         landfrac on the destination grid.
 
         Args:
@@ -153,12 +153,19 @@ class SpectralElementGrid:
         """
         with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tmp:
             tmp_path = tmp.name
-    
+
         cmd = [
-            "ncremap", "-t", "1", "-P", "clm",
-            "--sgs_frc=landfrac", "--sgs_msk=landmask",
-            "-m", str(self.weight_file),
-            str(nc_file), tmp_path,
+            "ncremap",
+            "-t",
+            "1",
+            "-P",
+            "clm",
+            "--sgs_frc=landfrac",
+            "--sgs_msk=landmask",
+            "-m",
+            str(self.weight_file),
+            str(nc_file),
+            tmp_path,
         ]
         log.info("Running ncremap for spatial metadata: %s", " ".join(cmd))
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -168,7 +175,8 @@ class SpectralElementGrid:
             )
         return xr.open_dataset(tmp_path)[["area", "landfrac"]]
 
-    def regrid_data(self,
+    def regrid_data(
+        self,
         input_file: Path,
         output_path: Path,
     ) -> xr.Dataset:
@@ -192,13 +200,17 @@ class SpectralElementGrid:
                 f"Concatenated history file not found: {input_file}"
             )
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         cmd = [
             find_tool("ncremap"),
-            "-P", "clm",
-            "--sgs_frc=landfrac", "--sgs_msk=landmask",
-            "-m", str(self.weight_file),
-            str(input_file), str(output_path),
+            "-P",
+            "clm",
+            "--sgs_frc=landfrac",
+            "--sgs_msk=landmask",
+            "-m",
+            str(self.weight_file),
+            str(input_file),
+            str(output_path),
         ]
         log.info("Running ncremap for data regridding: %s", " ".join(cmd))
         result = subprocess.run(cmd, capture_output=True, text=True)

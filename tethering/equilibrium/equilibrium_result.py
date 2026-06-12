@@ -2,56 +2,43 @@
 
 from __future__ import annotations
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
 class VariableResult:
-    """Base result for a single variable.
-
-    Attributes
-    ----------
-    name (str):
-        Variable name
-    drift (float):
-        absolute delta/yr in the variable's units
-    threshold (float | None):
-        drift threshold
-    passed (bool | None):
-        None if no threshold configured or variable was absent.
-    equil_year (int | None):
-        First spinup year at which equilibrium was continuously maintained.
-        None if never achieved or no threshold configured
-    is_optional (bool):
-        If True, failure produces a warning rather than a fatal result
-    """
-
     name: str
     drift: float
     threshold: float | None
     passed: bool | None
     equil_year: int | None
     is_optional: bool = False
+    is_gridded: bool = False
+    cell_threshold: float | None = None  # only meaningful when is_gridded
 
 
 @dataclass
-class ScalarResult(VariableResult):
-    """Result for a globally-aggregated variable."""
-
-    pass
-
-
-@dataclass
-class GriddedResult(VariableResult):
-    """Result for a per-cell gridded variable.
-
-    drift: percent of land area with per-cell drift above cell_threshold
-    threshold: pct_landarea threshold
-    cell_threshold: per-cell drift threshold in gC/m2/yr
-    """
-
-    cell_threshold: float = field(kw_only=True)
-
+class CycleDiagnostics:
+    name: str
+    is_gridded: bool
+    is_optional: bool
+    threshold: float | None
+    cell_threshold: float | None
+    cycle_years: list[int]
+    cycle_values: list          
+    delta_years: list[int]
+    deltas: list[float]
+    drift: float
+    passed: bool | None
+    equil_year: int | None
+    
+    def to_result(self) -> VariableResult:
+        return VariableResult(
+            name=self.name, drift=self.drift, threshold=self.threshold,
+            passed=self.passed, equil_year=self.equil_year,
+            is_optional=self.is_optional, is_gridded=self.is_gridded,
+            cell_threshold=self.cell_threshold,
+        )
 
 @dataclass
 class EquilibriumResult:
@@ -74,6 +61,17 @@ class EquilibriumResult:
     variables: dict[str, VariableResult]
     plot_path: Path | None
     case_name: str
+
+    @classmethod
+    def from_variables(cls, variables, plot_path, case_name):
+        passed = all(
+            v.passed
+            for v in variables.values()
+            if v.passed is not None and not v.is_optional
+        )
+        return cls(
+            passed=passed, variables=variables, plot_path=plot_path, case_name=case_name
+        )
 
     def failed_variables(self) -> list[VariableResult]:
         """Non-optional variables that failed the equilibrium check."""

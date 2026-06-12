@@ -3,6 +3,7 @@
 from __future__ import annotations
 import shutil
 
+
 def find_tool(name: str) -> str:
     """
     Return the full path to an external tool (ncremap, ncrcat,

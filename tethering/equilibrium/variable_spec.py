@@ -3,12 +3,47 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Callable
 
 import xarray as xr
 
 _SECINYR = 60.0 * 60.0 * 24.0 * 365.0
 _G_TO_PGC = 1.0e-15
 _KG_TO_G = 1.0e3
+
+from .equilibrium_result import CycleDiagnostics
+
+@dataclass
+class DriftContext:
+    """Drift context passed to VariableSpec.
+
+    Each VariableSpec subclass uses only the fields relevant to it and ignores
+    the rest. This avoids a mixed-concern signature on the abstract interface
+    where some arguments are only meaningful to one subclass.
+
+    Attributes
+    ----------
+    nyears_cycle : int | None
+        Number of years in the cycle for the timeseries. Generally corresponds to the
+        number of years in the meteorological forcing data.
+    threshold : float | None
+        Drift threshold
+    land_area: xr.DataArray | None
+        land area [m2]
+    cell_threshold: float | None
+        per-gridcell area threshold
+    spatial_dims: list[str] | None
+        spatial dimensions for land area-based summing
+    first_year: int | None
+        first year on time series
+    """
+
+    nyears_cycle: int | None = None
+    threshold: float | None = None
+    land_area: xr.DataArray | None = None
+    cell_threshold: float | None = None
+    spatial_dims: list[str] | None = None
+    first_year: int | None = None
 
 
 @dataclass(frozen=True)
@@ -36,23 +71,115 @@ class VariableSpec(ABC):
     units: str
     is_optional: bool = False
     fallback_components: tuple[str, ...] = ()
+    reconstruct: Callable[[xr.Dataset], xr.DataArray] | None = None
 
     @abstractmethod
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, spatial_dims: list[str]
+        self,
+        raw_values: xr.DataArray,
+        land_area_m2: xr.DataArray,
+        spatial_dims: list[str],
     ) -> xr.DataArray:
-        """Convert to the correct units
+        """Calculate thetimeseries that compute_drift consumes (spatially aggregated for
+        scalar specs, per-cell for gridded)
 
         Args:
             raw_values (xr.DataArray): input raw data array
             land_area_m2 (xr.DataArray): land area data array [m2]
-            spatial_dims (list[str]): spatial dimensions to aggregate over, 
+            spatial_dims (list[str]): spatial dimensions to aggregate over,
             e.g. ['lat', 'lon'] for regular grids or ['lndgrid'] for spectral element grids
 
         Returns:
             xr.DataArray: output converted array
         """
 
+    def _cycle_reduce(self, cycle_slice: xr.DataArray) -> float:
+        """Sample first year of the cycle; return a float
+        Args:
+            cycle_slice (xr.DataArray): input slice
+            context (DriftContext): DriftContext instance
+        """
+        return float(cycle_slice.isel(time=0).values)
+
+    def _transition_metric(
+        self, prev: float, curr: float, context: DriftContext
+    ) -> float:
+        """Non-negative drift between two consecutive cycle representations.
+
+        Args:
+            prev (float): previous cycle
+            curr (float): current cycle
+            context (DriftContext): DriftContext instance
+
+        Raises:
+            context not supplied
+        Returns:
+            float: drift between two consecutive cycles
+        """
+        if context.nyears_cycle is None:
+            raise ValueError("context.nyears_cycle is required to compute drift")
+        return (curr - prev) / context.nyears_cycle
+
+    def compute_drift(
+        self,
+        time_series: xr.DataArray,
+        context: DriftContext,
+    ) -> CycleDiagnostics:
+        """Compute drift for this variable
+
+        Args:
+            time_series (xr.DataArray): input time series
+            nyears (int): number of years per cycle
+            first_year (int): first year of the dataset
+            threshold (float | None, optional): drift threshold. Defaults to None.
+
+        Raises:
+            ValueError: required context not supplied
+
+        Returns:
+            CycleDiagnostics: cycle diagnostics
+        """
+        if context.nyears_cycle is None:
+            raise ValueError("context.nyears_cycle is required to compute drift")
+        if context.first_year is None:
+            raise ValueError("context.first_year is required to compute drift")
+        num_years, first_year = context.nyears_cycle, context.first_year
+        ncycles = len(time_series.time) // num_years
+        
+        reps = [
+            self._cycle_reduce(
+                time_series.isel(
+                    time=slice(i * num_years, (i + 1) * num_years)
+                )
+            )
+            for i in range(ncycles)
+        ]
+        deltas = [
+            self._transition_metric(reps[i], reps[i + 1], context)
+            for i in range(ncycles - 1)
+        ]
+        drift = abs(deltas[-1]) if deltas else float("nan")
+        
+        if context.threshold is None:
+            passed, equil_year = None, None
+        else:
+            passed = drift < context.threshold
+            equil_year = _find_equil_year(deltas, context.threshold, num_years, first_year)
+            
+        return CycleDiagnostics(
+            name=self.name,
+            is_gridded=False,
+            is_optional=self.is_optional,
+            threshold=context.threshold,
+            cell_threshold=context.cell_threshold,
+            cycle_years=[first_year + i*num_years for i in range(ncycles)],
+            cycle_values=reps,
+            delta_years=[first_year + i*num_years + num_years // 2 for i in range(ncycles - 1)],
+            deltas=deltas,
+            drift=drift,
+            passed=passed,
+            equil_year=equil_year
+        )
 
 @dataclass(frozen=True)
 class SummedSpec(VariableSpec):
@@ -69,7 +196,10 @@ class SummedSpec(VariableSpec):
     cf_base: float = field(kw_only=True)
 
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, spatial_dims: list[str]
+        self,
+        raw_values: xr.DataArray,
+        land_area_m2: xr.DataArray,
+        spatial_dims: list[str],
     ):
         return self.cf_base * (land_area_m2 * raw_values).sum(dim=spatial_dims)
 
@@ -89,7 +219,10 @@ class MeanSpec(VariableSpec):
     cf_base: float = field(kw_only=True)
 
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, spatial_dims: list[str]
+        self,
+        raw_values: xr.DataArray,
+        land_area_m2: xr.DataArray,
+        spatial_dims: list[str],
     ):
         la_sum = land_area_m2.sum(dim=spatial_dims)
         return self.cf_base * (land_area_m2 * raw_values).sum(dim=spatial_dims) / la_sum
@@ -98,14 +231,101 @@ class MeanSpec(VariableSpec):
 @dataclass(frozen=True)
 class GriddedSpec(VariableSpec):
     """
-    Per-cell gridded evaluation — no spatial aggregation.
-    Drift is computed on the raw per-cell values directly.
+    Per-cell gridded evaluation. convert() is identity: the per-cell map
+    over time is the series that compute_drift consumes (no spatial aggregation,
+    no unit conversion — the per-year rate is applied in compute_drift).
     """
 
     def convert(
-        self, raw_values: xr.DataArray, land_area_m2: xr.DataArray, spatial_dims: str
-    ):
-        return raw_values  # caller handles drift per-cell
+        self,
+        raw_values: xr.DataArray,
+        land_area_m2: xr.DataArray,
+        spatial_dims: list[str],
+    ) -> xr.DataArray:
+        return raw_values
+
+    def _cycle_reduce(self, cycle_slice: xr.DataArray) -> float:
+        """Sample first year of the cycle, keeping spatial array
+
+        Args:
+            cycle_slice (xr.DataArray): input slice
+            context (DriftContext): DriftContext instance
+        """
+        return cycle_slice.isel(time=0).values
+
+    def _transition_metric(
+        self, prev: float, curr: float, context: DriftContext
+    ) -> float:
+        """Non-negative drift between two consecutive cycle representations.
+
+        Args:
+            prev (float): previous cycle
+            curr (float): current cycle
+            context (DriftContext): DriftContext instance
+
+        Raises:
+            ValueError: required context not supplied
+
+        Returns:
+            float: drift between two consecutive cycles
+        """
+        if context.nyears_cycle is None:
+            raise ValueError("compute_drift requires context.nyears_cycle")
+        if context.cell_threshold is None:
+            raise ValueError("GriddedSpec requires context.cell_threshold")
+        if context.land_area is None:
+            raise ValueError("GriddedSpec requires context.land_area")
+        if context.spatial_dims is None:
+            raise ValueError("GriddedSpec requires context.spatial_dims")
+
+        land_area_sum = context.land_area.sum(dim=context.spatial_dims)
+        exceed = abs(curr - prev) / context.nyears_cycle > context.cell_threshold
+        return float(
+            (
+                100.0
+                * (context.land_area * exceed).sum(dim=context.spatial_dims)
+                / land_area_sum
+            ).values
+        )
+
+
+def _find_equil_year(
+    cycle_deltas: list[float],
+    threshold: float,
+    cycle_years: int,
+    first_year: int,
+) -> int | None:
+    """
+    Find the first cycle year from which all subsequent deltas
+    remain below threshold. Returns None if equilibrium was never achieved.
+    """
+    below = [abs(d) < threshold for d in cycle_deltas]
+    if all(below):
+        return first_year
+    if not below[-1]:
+        return None
+    for j in range(len(below) - 1, -1, -1):
+        if not below[j]:
+            return first_year + (j + 2) * cycle_years 
+    return None
+
+
+def _reconstruct_tws(ds: xr.Dataset) -> xr.DataArray:
+    """Reconstruct TWS from water storage components when TWS is absent
+
+    Args:
+        ds (xr.Dataset): input dataset with required variables
+
+    Returns:
+        xr.DataArray: TWS dataarray
+    """
+    return (
+        ds["H2OCAN"]
+        + ds["H2OSNO"]
+        + ds["WA"]
+        + ds["SOILLIQ"].sum(dim="levgrnd", keep_attrs=True)
+        + ds["SOILICE"].sum(dim="levgrnd", keep_attrs=True)
+    )
 
 
 # Standard CLM variable specs, matching NCL script conversions exactly.
@@ -122,6 +342,7 @@ _CLM_SPECS: tuple[VariableSpec, ...] = (
         dataset_var="TOTSOMC",
         units="PgC",
         cf_base=_G_TO_PGC,
+        is_optional=True,
     ),
     SummedSpec(
         name="TOTVEGC",
@@ -148,6 +369,7 @@ _CLM_SPECS: tuple[VariableSpec, ...] = (
         cf_base=1.0 / 1.0e3,  # mm * m²/m² / 1000 -> m (weighted mean)
         is_optional=True,
         fallback_components=("H2OCAN", "H2OSNO", "WA", "SOILLIQ", "SOILICE"),
+        reconstruct=_reconstruct_tws,
     ),
     MeanSpec(
         name="H2OSNO",
