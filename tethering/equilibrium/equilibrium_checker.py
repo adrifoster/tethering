@@ -9,8 +9,8 @@ import xarray as xr
 import matplotlib.pyplot as plt
 
 from .equilibrium_config import EquilibriumConfig
-from .variable_spec import get_specs, GriddedSpec, DriftContext
-from .equilibrium_result import VariableResult, CycleDiagnostics, EquilibriumResult
+from .variable_spec import get_specs, VariableSpec, GriddedSpec, DriftContext, DriftResult
+from .equilibrium_result import VariableResult, EquilibriumResult
 from .case_loader import CaseLoader
 
 log = logging.getLogger(__name__)
@@ -48,28 +48,30 @@ class EquilibriumChecker:
             hist_dir, case_name, output_dir, tape=tape
         )
 
+        # calculate time series and drift for each variable
         time_series = self._build_time_series(
             case.dataset, case.land_area, case.absent_optional, case.spatial_dims
         )
-        var_results, diagnostics = self._evaluate(
+        drift_results = self._calculate_drift(
             time_series,
             case.land_area,
             case.spatial_dims,
             case.first_year,
         )
-
-        plot_path = output_dir / f"{case_name}_equilibrium.png"
-        self._plot_diagnostics(
-            timeseries=time_series,
-            results=var_results,
-            land_area=case.land_area,
-            nyears=self.config.cycle_years,
-            ncycles=case.ncycles,
-            pct_landarea=self.config.pct_landarea,
-            output_path=plot_path,
-            spatial_dims=case.spatial_dims,
-        )
-        return EquilibriumResult.from_variables(var_results, plot_path, case_name)
+        var_results = _to_variable_results(drift_results, self.specs)
+        
+        # plot_path = output_dir / f"{case_name}_equilibrium.png"
+        # self._plot_diagnostics(
+        #     timeseries=time_series,
+        #     results=var_results,
+        #     land_area=case.land_area,
+        #     nyears=self.config.cycle_years,
+        #     ncycles=case.ncycles,
+        #     pct_landarea=self.config.pct_landarea,
+        #     output_path=plot_path,
+        #     spatial_dims=case.spatial_dims,
+        # )
+        # return EquilibriumResult.from_variables(var_results, plot_path, case_name)
     
 
     def _build_time_series(
@@ -114,14 +116,14 @@ class EquilibriumChecker:
 
         return time_series
 
-    def _evaluate(
+    def _calculate_drift(
         self,
         time_series: dict[str, xr.DataArray],
         land_area: xr.DataArray,
         spatial_dims: list[str],
         first_year: int
-    ) -> tuple[dict[str, VariableResult], dict[str, CycleDiagnostics]]:
-        """Evaluate each variable time series to see if it has reached equilibrium
+    ) -> dict[str, DriftResult]:
+        """Calculate drift for each spec
 
         Args:
             time_series (dict[str, xr.DataArray]): variable: time-series
@@ -133,17 +135,19 @@ class EquilibriumChecker:
             ValueError: Gridded variable needs a per-cell threshold 
 
         Returns:
-            dict[str, VariableResult]: VariableResult per variable
+            dict[str, DriftResult]: DriftResult per variable
         """
-        diagnostics = {}
+        drift_results = {}
         for spec in self.specs:
-            is_gridded = isinstance(spec, GriddedSpec)
-            if is_gridded:
+            
+            # gridded specs use cell_threshold as the per-gridcell threshold
+            # and config.pct_landarea to check overall passing
+            if isinstance(spec, GriddedSpec):
                 threshold = self.config.pct_landarea
                 cell_threshold = self.config.thresholds.get(spec.name)
                 if cell_threshold is None:
                     raise ValueError(
-                        f"Gridded variable {spec.name!r} requires a per-cell threshold (cell_threshold)"
+                        f"Gridded variable {spec.name!r} requires cell_threshold "
                         f"in config.thresholds, but none was found."
                     )
             else:
@@ -152,18 +156,15 @@ class EquilibriumChecker:
             
             data = time_series.get(spec.name)
             if data is None:
-                diagnostics[spec.name] = CycleDiagnostics(
-                    name=spec.name, is_gridded=is_gridded, is_optional=spec.is_optional,
-                    threshold=threshold, cell_threshold=cell_threshold,
-                    cycle_years=[], cycle_values=[], delta_years=[], deltas=[],
-                    drift=float("nan"), passed=None, equil_year=None)
+                drift_results[spec.name] = DriftResult(
+                    threshold=threshold, cell_threshold=cell_threshold
+                )
                 continue
-            diagnostics[spec.name] = spec.compute_drift(data, DriftContext(
+            drift_results[spec.name] = spec.compute_drift(data, DriftContext(
                 self.config.cycle_years, threshold, land_area,
                 cell_threshold, spatial_dims, first_year))
     
-        results = {var_name: diagnostic.to_result() for var_name, diagnostic in diagnostics.items()}
-        return results, diagnostics
+        return drift_results
             
 
     def _plot_diagnostics(
@@ -263,3 +264,21 @@ class EquilibriumChecker:
         fig.savefig(str(output_path), dpi=150, bbox_inches="tight")
         plt.close(fig)
         return output_path
+
+def _to_variable_results(
+    drift_results: dict[str, DriftResult],
+    specs: tuple[VariableSpec, ...],
+) -> dict[str, VariableResult]:
+    results = {}
+    for spec in specs:
+        dr = drift_results[spec.name]
+        results[spec.name] = VariableResult(
+            name=spec.name,
+            drift=dr.drift,
+            passed=dr.passed,
+            equil_year=dr.equil_year,
+            threshold=dr.threshold,
+            cell_threshold=dr.cell_threshold,
+            is_optional=spec.is_optional,
+        )
+    return results

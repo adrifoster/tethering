@@ -1,4 +1,4 @@
-"""Classes to deal with loading data for a case"""
+"""Classes to deal with loading required data for a case"""
 
 from __future__ import annotations
 import logging
@@ -22,10 +22,25 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class LoadedCase:
-    """Output of the IO layer: all file access is done, everything below is in memory."""
+    """Output of the IO layer: all file access is done, everything below is in memory.
+    
+    Attributes
+    -----------
+    dataset (xr.Dataset):
+        actual in-memory dataset, annual resolution
+    land_area (xr.DataArray):
+        land area for the dataset [m2]
+    spatial_dims (list[str]):
+        spatial dimension on the dataset, e.g. ['lat', 'lon'] for regular grids
+    absent_optional (set[str]): set of absent but optional variables
+    ncycles (int):
+        number of cycles on the dataset
+    first_year (int):
+        first year of the dataset time series
+    """
 
-    dataset: xr.Dataset  # annual-resolution
-    land_area: xr.DataArray  # m2
+    dataset: xr.Dataset
+    land_area: xr.DataArray
     spatial_dims: list[str]
     absent_optional: set[str]
     ncycles: int
@@ -33,7 +48,16 @@ class LoadedCase:
 
 
 class CaseLoader:
-    """Turns a case's history directory into a clean annual dataset + grid metadata."""
+    """Turns a case's history directory into a clean annual dataset + grid metadata.
+    
+    Attributes
+    -----------
+    config (EquilibriumConfig):
+        input config with information about the test
+    specs (tuple[VariableSpec,...])
+        set of variables we are actually looking at 
+    
+    """
 
     def __init__(self, config: EquilibriumConfig, specs: tuple[VariableSpec, ...]):
         self.config = config
@@ -42,6 +66,17 @@ class CaseLoader:
     def load(
         self, hist_dir: Path, case_name: str, output_dir: Path, tape: str = "h0a"
     ) -> LoadedCase:
+        """Load the case
+
+        Args:
+            hist_dir (Path): history directory
+            case_name (str): case name
+            output_dir (Path): output directory where the concatted file is written
+            tape (str, optional): history tape. Defaults to "h0a".
+
+        Returns:
+            LoadedCase: case dataset loaded into memory
+        """
         files = _find_history_files(hist_dir, case_name, tape=tape)
 
         with xr.open_dataset(files[0]) as first_ds:

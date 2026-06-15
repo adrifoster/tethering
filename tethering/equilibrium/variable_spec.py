@@ -11,7 +11,6 @@ _SECINYR = 60.0 * 60.0 * 24.0 * 365.0
 _G_TO_PGC = 1.0e-15
 _KG_TO_G = 1.0e3
 
-from .equilibrium_result import CycleDiagnostics
 
 @dataclass
 class DriftContext:
@@ -44,6 +43,40 @@ class DriftContext:
     cell_threshold: float | None = None
     spatial_dims: list[str] | None = None
     first_year: int | None = None
+
+
+@dataclass
+class DriftResult:
+    """Raw output of compute_drift - needed to build a pass/fail verdict or plot data
+
+    Attributes
+    -----------
+    threshold : float | None
+        drift threshold
+    cell_threshold: float | None
+        per-gridcell area threshold
+    reps (list[float | xr.DataArray]):
+        per-cycle reductions (floats for scalars; DataArrays for gridded)
+    deltas (list[float]):
+        signed deltas between cycles
+    drift (float):
+        drift for the last delta
+    passed (bool | None):
+        passed equilibrium check?
+    equil_year (bool | None):
+        first year we pass the check
+    ncycles (int | None):
+        number of cycles in the timeseries
+    """
+
+    threshold: float | None
+    cell_threshold: float | None
+    reps: list = field(default_factory=list)
+    deltas: list = field(default_factory=list)
+    drift: float = float("nan")
+    passed: bool | None = None
+    equil_year: int | None = None
+    ncycles: int | None = None
 
 
 @dataclass(frozen=True)
@@ -124,7 +157,7 @@ class VariableSpec(ABC):
         self,
         time_series: xr.DataArray,
         context: DriftContext,
-    ) -> CycleDiagnostics:
+    ) -> DriftResult:
         """Compute drift for this variable
 
         Args:
@@ -137,7 +170,7 @@ class VariableSpec(ABC):
             ValueError: required context not supplied
 
         Returns:
-            CycleDiagnostics: cycle diagnostics
+            DriftResult: result from drift calculation
         """
         if context.nyears_cycle is None:
             raise ValueError("context.nyears_cycle is required to compute drift")
@@ -145,12 +178,10 @@ class VariableSpec(ABC):
             raise ValueError("context.first_year is required to compute drift")
         num_years, first_year = context.nyears_cycle, context.first_year
         ncycles = len(time_series.time) // num_years
-        
+
         reps = [
             self._cycle_reduce(
-                time_series.isel(
-                    time=slice(i * num_years, (i + 1) * num_years)
-                )
+                time_series.isel(time=slice(i * num_years, (i + 1) * num_years))
             )
             for i in range(ncycles)
         ]
@@ -159,27 +190,26 @@ class VariableSpec(ABC):
             for i in range(ncycles - 1)
         ]
         drift = abs(deltas[-1]) if deltas else float("nan")
-        
+
         if context.threshold is None:
             passed, equil_year = None, None
         else:
             passed = drift < context.threshold
-            equil_year = _find_equil_year(deltas, context.threshold, num_years, first_year)
-            
-        return CycleDiagnostics(
-            name=self.name,
-            is_gridded=False,
-            is_optional=self.is_optional,
+            equil_year = _find_equil_year(
+                deltas, context.threshold, num_years, first_year
+            )
+
+        return DriftResult(
             threshold=context.threshold,
             cell_threshold=context.cell_threshold,
-            cycle_years=[first_year + i*num_years for i in range(ncycles)],
-            cycle_values=reps,
-            delta_years=[first_year + i*num_years + num_years // 2 for i in range(ncycles - 1)],
+            reps=reps,
             deltas=deltas,
             drift=drift,
             passed=passed,
-            equil_year=equil_year
+            equil_year=equil_year,
+            ncycles=ncycles,
         )
+
 
 @dataclass(frozen=True)
 class SummedSpec(VariableSpec):
@@ -251,7 +281,7 @@ class GriddedSpec(VariableSpec):
             cycle_slice (xr.DataArray): input slice
             context (DriftContext): DriftContext instance
         """
-        return cycle_slice.isel(time=0).values
+        return cycle_slice.isel(time=0)
 
     def _transition_metric(
         self, prev: float, curr: float, context: DriftContext
@@ -285,7 +315,7 @@ class GriddedSpec(VariableSpec):
                 100.0
                 * (context.land_area * exceed).sum(dim=context.spatial_dims)
                 / land_area_sum
-            ).values
+            )
         )
 
 
@@ -306,7 +336,7 @@ def _find_equil_year(
         return None
     for j in range(len(below) - 1, -1, -1):
         if not below[j]:
-            return first_year + (j + 2) * cycle_years 
+            return first_year + (j + 2) * cycle_years
     return None
 
 

@@ -13,32 +13,7 @@ class VariableResult:
     passed: bool | None
     equil_year: int | None
     is_optional: bool = False
-    is_gridded: bool = False
-    cell_threshold: float | None = None  # only meaningful when is_gridded
-
-
-@dataclass
-class CycleDiagnostics:
-    name: str
-    is_gridded: bool
-    is_optional: bool
-    threshold: float | None
-    cell_threshold: float | None
-    cycle_years: list[int]
-    cycle_values: list          
-    delta_years: list[int]
-    deltas: list[float]
-    drift: float
-    passed: bool | None
-    equil_year: int | None
-    
-    def to_result(self) -> VariableResult:
-        return VariableResult(
-            name=self.name, drift=self.drift, threshold=self.threshold,
-            passed=self.passed, equil_year=self.equil_year,
-            is_optional=self.is_optional, is_gridded=self.is_gridded,
-            cell_threshold=self.cell_threshold,
-        )
+    cell_threshold: float | None = None  # only meaningful when the variable is gridded
 
 @dataclass
 class EquilibriumResult:
