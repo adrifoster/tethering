@@ -357,6 +357,19 @@ def _reconstruct_tws(ds: xr.Dataset) -> xr.DataArray:
         + ds["SOILICE"].sum(dim="levgrnd", keep_attrs=True)
     )
 
+def _reconstruct_fates_totvegc(ds: xr.Dataset) -> xr.DataArray:
+    """Reconstruct TOTECOSYSC from FATES_VEGC and TOTSOCM
+
+    Args:
+        ds (xr.Dataset): input dataset with required variables
+
+    Returns:
+        xr.DataArray: TOTECOSYSC dataarray
+    """
+    return (
+        ds["FATES_VEGC"] + ds["TOTSOMC"]
+    )
+
 
 # Standard CLM variable specs, matching NCL script conversions exactly.
 # area is km2, converted to m2 via _KM2_TO_M2 when land_area is computed.
@@ -383,13 +396,13 @@ _CLM_SPECS: tuple[VariableSpec, ...] = (
     MeanSpec(
         name="TLAI",
         dataset_var="TLAI",
-        units="m2/m2",
+        units="m$^2$ m$^{-2}$",
         cf_base=1.0,  # m²/m² * m² / m² -> m²/m² (weighted mean)
     ),
     SummedSpec(
         name="GPP",
         dataset_var="GPP",
-        units="PgC/yr",
+        units="PgC yr$^{-1}$",
         cf_base=_G_TO_PGC * _SECINYR,  # g C/m²/s * s/yr * m² -> Pg C/yr
     ),
     MeanSpec(
@@ -410,7 +423,7 @@ _CLM_SPECS: tuple[VariableSpec, ...] = (
     GriddedSpec(
         name="TOTECOSYSC_gridded",
         dataset_var="TOTECOSYSC",
-        units="gC/m2/yr",
+        units="gC m$^{-2}$ yr$^{-1}$",
     ),
 )
 
@@ -420,15 +433,19 @@ _FATES_OVERRIDES: dict[str, VariableSpec] = {
     "TOTECOSYSC": SummedSpec(
         name="TOTECOSYSC",
         dataset_var="TOTECOSYSC",
-        cf_base=_G_TO_PGC,
+        cf_base=_KG_TO_G * _G_TO_PGC,
         units="PgC",
-        is_optional=True,
+        fallback_components=("FATES_VEGC", "TOTSOMC"),
+        reconstruct=_reconstruct_fates_totvegc,
     ),
     "TOTECOSYSC_gridded": GriddedSpec(
         name="TOTECOSYSC_gridded",
         dataset_var="TOTECOSYSC",
-        units="gC/m2/yr",
-        is_optional=True,
+        units="gC m$^{-2}$ yr$^{-1}$",
+        fallback_components=("FATES_VEGC", "TOTSOMC"),
+        cf_base=_KG_TO_G, 
+        reconstruct=_reconstruct_fates_totvegc,
+        
     ),
     "TOTVEGC": SummedSpec(
         name="TOTVEGC",
@@ -439,7 +456,7 @@ _FATES_OVERRIDES: dict[str, VariableSpec] = {
     "GPP": SummedSpec(
         name="GPP",
         dataset_var="FATES_GPP",
-        units="PgC/yr",
+        units="PgC yr$^{-1}$",
         cf_base=_KG_TO_G * _G_TO_PGC * _SECINYR,  # kg C/m²/s -> Pg C/yr
     ),
 }

@@ -15,6 +15,7 @@ class VariableResult:
     is_optional: bool = False
     cell_threshold: float | None = None  # only meaningful when the variable is gridded
 
+
 @dataclass
 class EquilibriumResult:
     """

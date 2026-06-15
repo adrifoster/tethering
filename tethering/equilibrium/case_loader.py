@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class LoadedCase:
     """Output of the IO layer: all file access is done, everything below is in memory.
-    
+
     Attributes
     -----------
     dataset (xr.Dataset):
@@ -49,14 +49,14 @@ class LoadedCase:
 
 class CaseLoader:
     """Turns a case's history directory into a clean annual dataset + grid metadata.
-    
+
     Attributes
     -----------
     config (EquilibriumConfig):
         input config with information about the test
     specs (tuple[VariableSpec,...])
-        set of variables we are actually looking at 
-    
+        set of variables we are actually looking at
+
     """
 
     def __init__(self, config: EquilibriumConfig, specs: tuple[VariableSpec, ...]):
@@ -89,18 +89,22 @@ class CaseLoader:
             bounds_var = first_ds["time"].attrs.get("bounds", "time_bounds")
         concat_path = output_dir / f"{case_name}_concat.nc"
         _concat_files(
-            files, sorted(dataset_vars) + ["landfrac", "landmask", bounds_var], concat_path
+            files,
+            sorted(dataset_vars) + ["landfrac", "landmask", bounds_var],
+            concat_path,
         )
 
         ds = xr.open_dataset(concat_path, decode_timedelta=False)
         ds.load()
         if frequency == "monthly":
             ds = ds.resample(time="YE").mean()
-        
+
         bnd = "nbnd" if "nbnd" in ds["time_bounds"].dims else "hist_interval"
-        first_year = int(ds["time_bounds"].isel(time=0, **{bnd: 0}).dt.year.values) 
+        first_year = int(ds["time_bounds"].isel(time=0, **{bnd: 0}).dt.year.values)
         ncycles = self._validate_cycles(ds)
-        return LoadedCase(ds, land_area, spatial_dims, absent_optional, ncycles, first_year)
+        return LoadedCase(
+            ds, land_area, spatial_dims, absent_optional, ncycles, first_year
+        )
 
     def _validate_cycles(self, ds: xr.Dataset):
         """Make sure we have enough cycles on the dataset to calculate equilibrium
@@ -239,8 +243,9 @@ def _is_se_grid(ds: xr.Dataset) -> bool:
     return "lndgrid" in ds["landfrac"].dims
 
 
-def _concat_files(files: list[str], dataset_vars: list[str], output_path: Path,
-                  force: bool = False):
+def _concat_files(
+    files: list[str], dataset_vars: list[str], output_path: Path, force: bool = False
+):
     """Concatenate and variable-subset a list of CLM history files into a
     single temporary NetCDF file using ncrcat.
 
@@ -255,17 +260,18 @@ def _concat_files(files: list[str], dataset_vars: list[str], output_path: Path,
         RuntimeError: If ncrcat exits non-zero.
     """
     vars_to_extract = list(dict.fromkeys(dataset_vars))
-    
+
     if not force and _concat_is_current(output_path, vars_to_extract):
         log.info("Reusing existing concatenated file: %s", output_path)
         return
-    
+
     var_str = ",".join(vars_to_extract)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         find_tool("ncrcat"),
         "-O",
-        "-v", var_str,
+        "-v",
+        var_str,
         *[str(f) for f in files],
         str(output_path),
     ]
@@ -277,6 +283,7 @@ def _concat_files(files: list[str], dataset_vars: list[str], output_path: Path,
             f"stderr: {result.stderr}\n"
             f"stdout: {result.stdout}"
         )
+
 
 def _concat_is_current(
     output_path: Path,
